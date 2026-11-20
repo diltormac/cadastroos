@@ -295,12 +295,8 @@ import { supabaseClient } from "../js/supabase.js";
         });
       };
 
-      const loadCatalog = async () => {
-        catalog.innerHTML =
-          '<span style="color: #8797b3; font-size: 12px; grid-column: 1 / -1; text-align: center;">Sincronizando...</span>';
-        await sincronizarServicos();
-        const dbServices = await db.catalogo_servicos.toArray();
-
+      // NOVO: separa a renderização do catálogo em função própria
+      const renderCatalogo = (dbServices) => {
         if (dbServices.length === 0) {
           catalog.innerHTML =
             '<span style="color: #8797b3; font-size: 12px; grid-column: 1 / -1; text-align: center;">Nenhum serviço no catálogo.</span>';
@@ -340,6 +336,32 @@ import { supabaseClient } from "../js/supabase.js";
             render();
             atualizarDestaquesCatalogo();
           });
+        });
+      };
+
+      // ALTERADO: mostra cache local IMEDIATAMENTE, sincroniza em background
+      const loadCatalog = async () => {
+        // 1) Render instantâneo do cache local
+        const locais = await db.catalogo_servicos.toArray();
+        if (locais.length > 0) {
+          renderCatalogo(locais);
+        } else {
+          catalog.innerHTML =
+            '<span style="color: #8797b3; font-size: 12px; grid-column: 1 / -1; text-align: center;">Carregando...</span>';
+        }
+
+        // 2) Sync em background — não bloqueia a UI
+        sincronizarServicos().then(async (sincronizou) => {
+          if (!sincronizou) {
+            const cache = await db.catalogo_servicos.toArray();
+            if (cache.length === 0) {
+              catalog.innerHTML =
+                '<span style="color: #8797b3; font-size: 12px; grid-column: 1 / -1; text-align: center;">Nenhum serviço no catálogo.</span>';
+            }
+            return;
+          }
+          const atualizados = await db.catalogo_servicos.toArray();
+          renderCatalogo(atualizados);
         });
       };
 

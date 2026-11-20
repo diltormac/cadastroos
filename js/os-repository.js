@@ -36,10 +36,13 @@ export const osRepository = {
       placa: dados.placa || "",
       observacao_manual: dados.observacao || "",
       servicos: dados.servicos || [],
+      // Cada foto ganha: blob, url pública (null até subir) e flag de envio
       fotos: (dados.fotos || []).map((f) => ({
         nome: f.name,
         tipo: f.type,
         blob: f,
+        url: null,
+        enviada: false,
       })),
       aparelho,
       numero_os: null,
@@ -53,6 +56,16 @@ export const osRepository = {
 
   async listarPendentes() {
     return await db.ordens_servico.where("status").equals("pendente").toArray();
+  },
+
+  // Marca uma foto específica como enviada (chamado pelo os-sync em tempo real)
+  async marcarFotoEnviada(osId, index, url) {
+    const atual = await db.ordens_servico.get(osId);
+    if (!atual || !Array.isArray(atual.fotos)) return;
+    const fotos = atual.fotos.map((f, i) =>
+      i === index ? { ...f, url, enviada: true } : f,
+    );
+    return await db.ordens_servico.update(osId, { fotos });
   },
 
   async marcarSincronizada(

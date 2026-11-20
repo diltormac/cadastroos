@@ -15,30 +15,35 @@ db.version(2).stores({
 });
 
 // Sincroniza: Pega do Supabase e salva no Dexie
+// Retorna true se sincronizou de verdade, false se caiu no fallback/offline
 export async function sincronizarServicos() {
-  try {
-    // Se não tiver internet, nem tenta bater no Supabase
-    if (!navigator.onLine) return;
+  if (!navigator.onLine) return false;
 
-    // Usa o cliente oficial do Supabase importado acima
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+
     const { data, error } = await supabaseClient
       .from("catalogo_servicos")
-      .select("*");
+      .select("*")
+      .abortSignal(controller.signal);
+
+    clearTimeout(timer);
 
     if (error) throw error;
-    if (!data || data.length === 0) return;
+    if (!data || data.length === 0) return false;
 
-    // Salva tudo no banco local (sobrescreve os antigos)
     await db.catalogo_servicos.clear();
     await db.catalogo_servicos.bulkAdd(data);
     console.log("Catálogo de serviços sincronizado com sucesso!");
+    return true;
   } catch (error) {
     console.warn(
       "Falha ao sincronizar com Supabase. Usando dados offline.",
       error,
     );
 
-    // PLANO B: Se o Supabase falhar e o banco local estiver vazio, carrega do JSON de teste
+    // PLANO B: se o banco local estiver vazio, carrega do JSON de teste
     try {
       const bancoAtual = await db.catalogo_servicos.toArray();
       if (bancoAtual.length === 0) {
@@ -50,5 +55,6 @@ export async function sincronizarServicos() {
     } catch (e) {
       console.error("Nem o JSON local foi encontrado.", e);
     }
+    return false;
   }
 }

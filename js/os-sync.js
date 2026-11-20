@@ -30,6 +30,28 @@ function resolverNomeAparelho(os) {
   return limpo || "APARELHO NÃO IDENTIFICADO";
 }
 
+// Sobe UMA foto; se já tem url, pula. Retorna a URL pública.
+async function subirFoto(osId, foto, index) {
+  if (foto.enviada && foto.url) return foto.url;
+
+  const nomeArquivo = `${Date.now()}-${Math.random().toString(36).substring(2)}.jpeg`;
+
+  const { error: errUp } = await supabaseClient.storage
+    .from("fotos-ordens")
+    .upload(nomeArquivo, foto.blob);
+
+  if (errUp) throw new Error("Erro upload original: " + errUp.message);
+
+  const { data: urlData } = supabaseClient.storage
+    .from("fotos-ordens")
+    .getPublicUrl(nomeArquivo);
+
+  const url = urlData.publicUrl;
+  // Persiste imediatamente — se cair depois, retry NÃO reenvia esta
+  await osRepository.marcarFotoEnviada(osId, index, url);
+  return url;
+}
+
 export const osSync = {
   async enviarPendentes() {
     if (sincronizando || !navigator.onLine) return;
@@ -41,6 +63,7 @@ export const osSync = {
 
       for (const os of pendentes) {
         try {
+          // --- Idempotência: se já existe no Supabase, só marca e segue ---
           if (os.uuid_local) {
             const { data: existente, error: selErr } = await supabaseClient
               .from("ordens_servico")
@@ -54,22 +77,13 @@ export const osSync = {
             }
           }
 
-          const urlsDasFotos = [];
-          for (const foto of os.fotos || []) {
-            const nomeArquivo = `${Date.now()}-${Math.random().toString(36).substring(2)}.jpeg`;
+          // --- Uploads em PARALELO (todas as fotos de uma OS ao mesmo tempo) ---
+          const fotos = os.fotos || [];
+          const urlsDasFotos = await Promise.all(
+            fotos.map((foto, i) => subirFoto(os.id, foto, i)),
+          );
 
-            const { error: errOrig } = await supabaseClient.storage
-              .from("fotos-ordens")
-              .upload(nomeArquivo, foto.blob);
-            if (errOrig)
-              throw new Error("Erro upload original: " + errOrig.message);
-
-            const { data: urlData } = supabaseClient.storage
-              .from("fotos-ordens")
-              .getPublicUrl(nomeArquivo);
-            urlsDasFotos.push(urlData.publicUrl);
-          }
-
+          // --- Agregações ---
           const servicosOriginais = Array.isArray(os.servicos)
             ? os.servicos
             : [];
@@ -91,12 +105,22 @@ export const osSync = {
             isConsertoOuSolda(s.nome),
           );
 
-          const numeroOSReforma = temReforma
-            ? null
-            : servicosOriginais.find((s) => isReforma(s.nome))?.numero_os ||
-              null;
+          // FIX: antes era `temReforma ? null : find(...)` — lógica invertida
+          // que resultava sempre null. Agora pega o número do serviço REFORMA
+          // quando existir.
+          const servicoReforma = servicosOriginais.find((s) =>
+            isReforma(s.nome),
+          );
+          const servicoConserto = servicosOriginais.find((s) =>
+            isConsertoOuSolda(s.nome),
+          );
 
-          const numeroOSConserto = temConsertoSolda ? null : null;
+          const numeroOSReforma = temReforma
+            ? servicoReforma?.numero_os || null
+            : null;
+          const numeroOSConserto = temConsertoSolda
+            ? servicoConserto?.numero_os_conserto || null
+            : null;
 
           const itensServicosPayload = servicosOriginais.map((s) => ({
             servico: s.nome,
@@ -104,7 +128,10 @@ export const osSync = {
             quantidade: s.qtd,
             placa: os.placa || null,
             cor: null,
-            numero_os: isReforma(s.nome) ? null : s.numero_os || null,
+            numero_os: isReforma(s.nome) ? s.numero_os || null : null,
+            numero_os_conserto: isConsertoOuSolda(s.nome)
+              ? s.numero_os_conserto || null
+              : null,
           }));
 
           const cadastroFinal = {
