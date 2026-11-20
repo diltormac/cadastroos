@@ -405,15 +405,49 @@
 
     <script>
       if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker
-            .register("./service-worker.js")
-            .then((reg) => {
-              reg.update();
-            })
-            .catch((error) => {
-              console.error("Falha ao registrar PWA:", error);
+        window.addEventListener("load", async () => {
+          try {
+            const reg = await navigator.serviceWorker.register(
+              "./service-worker.js",
+            );
+
+            reg.update();
+            setInterval(() => reg.update(), 60 * 1000);
+
+            let recarregando = false;
+            navigator.serviceWorker.addEventListener("controllerchange", () => {
+              if (recarregando) return;
+              recarregando = true;
+
+              const formSujo =
+                document.getElementById("ci-nome")?.value ||
+                document.getElementById("ci-telefone")?.value ||
+                document.getElementById("obs")?.value ||
+                (document.getElementById("cpf-label")?.textContent !== "CPF" &&
+                  document.getElementById("cpf-label")?.textContent) ||
+                (document.getElementById("placa-label")?.textContent !==
+                  "Placa" &&
+                  document.getElementById("placa-label")?.textContent) ||
+                document.querySelector("#servicesList .service-item") ||
+                document.querySelector(".iu-preview-item");
+              if (formSujo) {
+                if (
+                  confirm(
+                    "Nova versão disponível. Recarregar agora? Dados não enviados serão perdidos.",
+                  )
+                ) {
+                  window.location.reload();
+                } else {
+                  recarregando = false;
+                }
+                return;
+              }
+
+              window.location.reload();
             });
+          } catch (error) {
+            console.error("Falha ao registrar PWA:", error);
+          }
         });
       }
     </script>
