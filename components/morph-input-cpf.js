@@ -40,7 +40,7 @@
       <div class="morph-cpf-overlay" id="cpf-overlay">
         <div class="morph-cpf-input-box">
           ${iconCpf}
-          <input type="text" id="cpf-input" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="000.000.000-00" maxlength="14">
+          <input type="text" id="cpf-input" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14">
         </div>
         <button class="morph-cpf-btn-confirm" type="button" id="btn-confirm-cpf">
           ${iconCheck}
