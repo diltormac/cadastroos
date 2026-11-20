@@ -5,6 +5,7 @@ import {
   recarregarListaOS,
   carregarMaisOS,
   carregarMaisGaleria,
+  baixarTudoParaOffline, // <-- ADICIONADO AQUI
 } from "./api.js";
 import {
   alternarFaturamento,
@@ -31,18 +32,28 @@ import {
   tratarFotoQuebrada,
   agendarBloqueioFaturamento,
   atualizarTudo,
+  adicionarFotosOS,
+  excluirFotoOS,
 } from "./ui.js";
 import { setTouchStartX, setTouchEndX, exibirFaturamento } from "./state.js";
 import { toast } from "./utils.js";
 import { criarDropdownCustom } from "./views/dropdownCustom.js";
 import { obterCatalogoServicos } from "./catalogoStore.js";
+import { db } from "./db.js";
+import { supabaseClient } from "./config.js";
 
-/* ---------- DETECÇÃO DE ELECTRON ---------- */
 if (navigator.userAgent.includes("Electron")) {
   document.body.classList.add("is-electron");
 }
+/* ---------- DETECÇÃO DE PC (DESKTOP) ---------- */
+const ehMobile =
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent,
+  );
+if (!ehMobile) {
+  document.body.classList.add("is-desktop");
+}
 
-/* ---------- NAVEGAÇÃO ---------- */
 function mudarView(view) {
   estado.view = view;
   document
@@ -77,7 +88,29 @@ function mudarView(view) {
   fecharSidebar();
 }
 
-/* ---------- EXPÕE FUNÇÕES USADAS EM onclick DO HTML ---------- */
+window.filtrarPorCard = function (filtro) {
+  estado.filtroStatus = "all";
+  estado.filtroFinalizado = "all";
+  document
+    .querySelectorAll(".filter-btn")
+    .forEach((b) => b.classList.remove("active"));
+
+  if (filtro === "prontas") {
+    estado.filtroFinalizado = "prontas";
+    const btnTodas = document.querySelector('.filter-btn[data-status="all"]');
+    if (btnTodas) btnTodas.classList.add("active");
+  } else {
+    estado.filtroStatus = filtro;
+    const btnMatch = document.querySelector(
+      `.filter-btn[data-status="${filtro}"]`,
+    );
+    if (btnMatch) btnMatch.classList.add("active");
+  }
+
+  mudarView("os");
+  recarregarListaOS();
+};
+
 Object.assign(window, {
   alternarFaturamento,
   abrirSidebar,
@@ -102,38 +135,38 @@ Object.assign(window, {
   carregarMaisOS,
   carregarMaisGaleria,
   mudarView,
+  adicionarFotosOS,
+  excluirFotoOS,
 });
 
 Object.assign(window, {
   abrirRelatorioOS: (id) => {
     import("./state.js").then(({ listaOS }) => {
       const os = listaOS.find((o) => o.id === id);
-      if (os) {
-        abrirRelatorio(os);
-      } else {
-        import("./utils.js").then(({ toast }) => {
-          toast("OS não encontrada.", "error");
-        });
-      }
+      if (os) abrirRelatorio(os);
+      else toast("OS não encontrada.", "error");
     });
   },
 });
 
-/* ---------- EVENTOS ---------- */
 document.querySelectorAll(".sidebar-link[data-view]").forEach((el) => {
   el.addEventListener("click", () => mudarView(el.dataset.view));
 });
 
 document.querySelectorAll(".sidebar-link[data-filter]").forEach((el) => {
   el.addEventListener("click", () => {
-    estado.filtroStatus = el.dataset.filter;
+    const statusFiltro = el.dataset.filter;
+    estado.filtroStatus = statusFiltro;
+    estado.filtroFinalizado = "all";
+
     document
       .querySelectorAll(".filter-btn")
       .forEach((b) => b.classList.remove("active"));
     const match = document.querySelector(
-      `.filter-btn[data-status="${el.dataset.filter}"]`,
+      `.filter-btn[data-status="${statusFiltro}"]`,
     );
     if (match) match.classList.add("active");
+
     mudarView("os");
     recarregarListaOS();
   });
@@ -146,6 +179,7 @@ document.querySelectorAll(".filter-btn").forEach((btn) => {
       .forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     estado.filtroStatus = btn.dataset.status;
+    estado.filtroFinalizado = "all";
     recarregarListaOS();
   });
 });
@@ -158,7 +192,6 @@ document.getElementById("searchInput").addEventListener("input", (e) => {
   timeoutBusca = setTimeout(() => recarregarListaOS(), 350);
 });
 
-/* ===== sortSelect: dropdown customizado ===== */
 {
   const container = document.getElementById("sortSelect");
   if (container) {
@@ -183,13 +216,11 @@ document.getElementById("searchInput").addEventListener("input", (e) => {
   }
 }
 
-/* ===== FILTROS DE DATA E SERVIÇO ===== */
 const inputDataInicial = document.getElementById("dataInicial");
 const inputDataFinal = document.getElementById("dataFinal");
 const containerFiltroServico = document.getElementById("filtroServico");
 const btnLimparDatas = document.getElementById("btnLimparDatas");
 
-// 1. Inicializa o Calendário Customizado (Flatpickr)
 if (inputDataInicial && inputDataFinal) {
   const configCalendario = {
     locale: "pt",
@@ -204,23 +235,18 @@ if (inputDataInicial && inputDataFinal) {
       recarregarListaOS();
     },
   };
-
   flatpickr(inputDataInicial, configCalendario);
   flatpickr(inputDataFinal, configCalendario);
 }
 
-// 2. Substitui o <select> nativo por um dropdown customizado
 async function popularFiltroServicos() {
   if (!containerFiltroServico) return;
-
   try {
     const catalogo = await obterCatalogoServicos();
-
     const options = [
       { value: "all", text: "Todos os Serviços" },
       ...catalogo.map((s) => ({ value: s.nome, text: s.nome })),
     ];
-
     const dropdownCustom = criarDropdownCustom({
       id: "filtroServicoSelect",
       name: "filtroServico",
@@ -228,9 +254,7 @@ async function popularFiltroServicos() {
       options: options,
       className: "h-[34px] text-xs",
     });
-
     containerFiltroServico.replaceWith(dropdownCustom);
-
     dropdownCustom.addEventListener("change", () => {
       estado.filtroServico = dropdownCustom.value;
       recarregarListaOS();
@@ -239,29 +263,23 @@ async function popularFiltroServicos() {
     console.error("Erro ao carregar serviços para o filtro", e);
   }
 }
-
 popularFiltroServicos();
 
-// 3. Botão de limpar filtros (ajustado para Flatpickr e Dropdown custom)
 if (btnLimparDatas) {
   btnLimparDatas.addEventListener("click", () => {
     estado.dataInicial = "";
     estado.dataFinal = "";
     estado.filtroServico = "all";
-
     if (inputDataInicial && inputDataInicial._flatpickr)
       inputDataInicial._flatpickr.clear();
     if (inputDataFinal && inputDataFinal._flatpickr)
       inputDataFinal._flatpickr.clear();
-
     const selectCustom = document.getElementById("filtroServicoSelect");
     if (selectCustom) selectCustom.value = "all";
-
     recarregarListaOS();
   });
 }
 
-/* ---------- MODAL DE DETALHES E OUTROS EVENTOS ---------- */
 document.getElementById("modalDetalhes").addEventListener("click", (e) => {
   if (e.target.id === "modalDetalhes") fecharModal();
 });
@@ -293,7 +311,6 @@ window.addEventListener("resize", () => {
   if (window.innerWidth >= 1024) fecharSidebar();
 });
 
-/* Teclado: Esc fecha a camada de cima; setas navegam no lightbox. */
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (fecharCamadaSuperior()) e.preventDefault();
@@ -305,7 +322,6 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-/* Card de faturamento acionável pelo teclado (Enter ou Espaço). */
 const cardFaturamento = document.getElementById("cardFaturamento");
 cardFaturamento?.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") {
@@ -314,7 +330,6 @@ cardFaturamento?.addEventListener("keydown", (e) => {
   }
 });
 
-/* Fotos que não carregam (apagadas do armazenamento ou sem internet). */
 document.addEventListener(
   "error",
   (e) => {
@@ -331,29 +346,61 @@ document.addEventListener(
   true,
 );
 
-/* Rede caiu / voltou enquanto o app está aberto. */
 window.addEventListener("offline", () => {
   toast(
-    "Sem conexão com a internet. As alterações não serão salvas até a rede voltar.",
+    "Sem conexão com a internet. O app está operando no modo offline.",
     "error",
   );
 });
+
+async function sincronizarFilaOffline() {
+  if (!navigator.onLine || !supabaseClient) return;
+
+  const pendentes = await db.sync_queue.toArray();
+  if (pendentes.length === 0) return;
+
+  console.log(`Sincronizando ${pendentes.length} alterações pendentes...`);
+  toast(`Sincronizando ${pendentes.length} alteração(ões) feita(s) offline...`);
+
+  let sucessos = 0;
+
+  for (const item of pendentes) {
+    try {
+      if (item.tipo === "UPDATE") {
+        const { error } = await supabaseClient
+          .from("ordens_servico")
+          .update(item.dados)
+          .eq("id", item.osId);
+        if (error) throw error;
+      }
+      await db.sync_queue.delete(item.id);
+      sucessos++;
+    } catch (err) {
+      console.error("Falha ao sincronizar item", item, err);
+    }
+  }
+
+  if (sucessos > 0) {
+    toast(`${sucessos} alteração(ões) sincronizada(s) com o servidor!`);
+    carregarDados();
+  }
+}
+
 window.addEventListener("online", () => {
-  toast("Conexão restabelecida. Atualizando…");
-  carregarDados();
+  toast("Conexão restabelecida. Sincronizando…");
+  sincronizarFilaOffline();
 });
 
-/* Faturamento liberado volta a ficar oculto no horário marcado. */
 if (exibirFaturamento) {
   agendarBloqueioFaturamento(
     Number(sessionStorage.getItem("@osfacil_faturamento")),
   );
 }
 
-/* ---- ESCUTA O EVENTO DO COMPARTILHAMENTO (Substitui o prompt nativo) ---- */
 window.addEventListener("osfacil_toast", (e) => {
   toast(e.detail.mensagem, e.detail.tipo);
 });
 
-atualizarTudo(); // mostra "Carregando…" enquanto a consulta não volta
+atualizarTudo();
 carregarDados();
+baixarTudoParaOffline(); // <-- ADICIONADO AQUI (Roda em segundo plano)

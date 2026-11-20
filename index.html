@@ -4,657 +4,418 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#172033" />
-    <title>OS Fácil - Pré-Cadastro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="theme-color" content="#080f1d" />
+    <title>OS Fácil | Pré-Cadastro</title>
+
+    <!-- PWA / Instalável -->
+    <link rel="manifest" href="./manifest.json" />
     <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="./favicon-32x32.png"
     />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="./apple-touch-icon.png"
     />
-    <link rel="stylesheet" href="./css/styles.css" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+
+    <style>
+      :root {
+        --bg: #080f1d;
+        --panel: #111b2d;
+        --line: #34435f;
+        --text: #f4f7fc;
+        --yellow: #ffc400;
+        --green: #4ade80;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #050b14;
+        color: var(--text);
+        font-family:
+          Inter,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Arial,
+          sans-serif;
+        display: flex;
+        justify-content: center;
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
+
+      .app {
+        width: 100%;
+        max-width: 540px;
+        min-height: 100vh;
+        padding: 0 20px 28px;
+        background:
+          radial-gradient(
+            ellipse at 80% 20%,
+            rgba(42, 65, 105, 0.18),
+            transparent 42%
+          ),
+          linear-gradient(160deg, #0b1424 0%, var(--bg) 58%, #0a1424 100%);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .btn-base {
+        height: 100%;
+        width: 100%;
+        min-width: 0;
+        border: 1.5px solid #435675;
+        border-radius: 15px;
+        background: linear-gradient(145deg, #17243a, #101a2c);
+        color: #edf2fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+        transition: 0.2s;
+        padding: 0 8px;
+        overflow: hidden;
+      }
+      .btn-base.primary {
+        border: 2px solid var(--yellow);
+      }
+      .btn-base.filled {
+        border-color: var(--green);
+        color: var(--green);
+      }
+      .btn-base svg {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+      }
+      .btn-base span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .actions-wrapper {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        position: relative;
+        height: 68px;
+        width: 100%;
+        min-width: 0;
+      }
+      .component-slot {
+        flex: 1 1 0;
+        min-width: 0;
+        position: static !important;
+      }
+
+      .obs-container {
+        display: flex;
+        align-items: flex-start;
+        min-height: 105px;
+        padding: 15px 20px;
+        margin-bottom: 16px;
+        border: 1.5px solid var(--line);
+        border-radius: 17px;
+        background: var(--panel);
+      }
+      .obs-container textarea {
+        width: 100%;
+        min-height: 70px;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--text);
+        font-size: 16px;
+        resize: vertical;
+        font-family: inherit;
+        text-transform: uppercase;
+      }
+      .obs-container textarea::placeholder {
+        color: #8797b3;
+        text-transform: none;
+      }
+
+      .submit-btn {
+        width: 100%;
+        height: 66px;
+        border-radius: 17px;
+        border: 0;
+        background: linear-gradient(100deg, #ffd21a, #ffbd00);
+        color: #101827;
+        font-weight: 900;
+        font-size: 18px;
+        cursor: pointer;
+        margin-top: 10px;
+        transition: transform 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .submit-btn:active {
+        transform: scale(0.98);
+      }
+      .submit-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      @media (min-width: 700px) {
+        body {
+          padding: 24px 0;
+        }
+        .app {
+          min-height: 0;
+          border: 1px solid #26354d;
+          border-radius: 24px;
+          box-shadow: 0 24px 80px #0009;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div
-      id="toast-container"
-      class="fixed top-4 left-0 right-0 z-50 flex flex-col items-center pointer-events-none px-4 max-w-[500px] mx-auto"
-    ></div>
+    <main class="app">
+      <div id="header-container"></div>
 
-    <!-- MODAL DE IDENTIFICAÇÃO DO APARELHO -->
-    <div id="modalIdentificacao" class="modal-custom" style="z-index: 2000">
-      <div class="modal-box">
-        <div class="modal-header">
-          <span>Identificação do Aparelho</span>
-        </div>
-        <div style="padding: 20px">
-          <p
-            style="
-              font-size: 13px;
-              color: #475569;
-              margin-bottom: 12px;
-              text-align: center;
-            "
-          >
-            Para começar, dê um nome a este aparelho (Ex: Tablet Recepção,
-            Celular João).
-          </p>
-          <input
-            type="text"
-            id="inputNomeAparelho"
-            class="field"
-            placeholder="Digite o nome do aparelho"
-            style="text-align: center"
-          />
-        </div>
-        <div
-          style="
-            padding: 16px;
-            border-top: 1px solid #e2e8f0;
-            background: #f8fafc;
-          "
-        >
-          <button
-            id="btnSalvarIdentificacao"
-            class="submit-button"
-            style="height: 44px; font-size: 14px"
-          >
-            Confirmar e Entrar
-          </button>
-        </div>
-      </div>
-    </div>
+      <form id="osForm">
+        <div id="customer-info-container"></div>
 
-    <!-- MODAL DE ADICIONAR SERVIÇO -->
-    <div id="modalAdicionarServico" class="modal-custom" style="z-index: 1600">
-      <div class="modal-box" onclick="event.stopPropagation()">
-        <div class="modal-header">
-          <span
-            ><i class="fa-solid fa-wrench text-indigo-600 mr-1"></i> Adicionar
-            Serviço</span
-          >
-          <button
-            id="btnFecharModalAdicionar"
-            style="
-              background: none;
-              border: none;
-              font-size: 20px;
-              color: #94a3b8;
-            "
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-
-        <div
-          style="
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-          "
-        >
-          <div>
-            <label class="field-label"
-              >Serviço <span class="req">*</span></label
-            >
-
-            <!-- ===== Dropdown customizado (substitui <select> + botão do APK) ===== -->
-            <div id="modalSelectServico"></div>
-          </div>
-
-          <!-- Grupo de Cor (Reforma) -->
-          <div id="modalGrupoCor" class="hidden">
-            <label class="field-label"
-              >Cor da Roda <span class="req">*</span></label
-            >
-            <input
-              type="text"
-              id="modalInputCor"
-              class="field"
-              placeholder="Ex: BLACK PIANO"
-              autocomplete="off"
-            />
-          </div>
-
-          <!-- NOVO Grupo de Placa (Alinhamento/Camber/Caster) -->
-          <div id="modalGrupoPlaca" class="hidden">
-            <label class="field-label"
-              >Placa do Veículo <span class="req">*</span></label
-            >
-            <input
-              type="text"
-              id="modalInputPlaca"
-              class="field"
-              placeholder="Ex: ABC1D23"
-              maxlength="8"
-              autocomplete="off"
-            />
-          </div>
-
-          <!-- Grupo de Número OS (Conserto/Solda) -->
-          <div id="modalGrupoNumero" class="hidden">
-            <label class="field-label"
-              >Número da OS <span class="req">*</span></label
-            >
-            <input
-              type="text"
-              id="modalInputNumero"
-              class="field"
-              placeholder="Digite o número"
-              inputmode="numeric"
-              autocomplete="off"
-            />
-          </div>
-
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="field-label"
-                >Quantidade <span class="req">*</span></label
-              >
-              <input
-                type="number"
-                id="modalInputQtd"
-                min="1"
-                value="1"
-                class="field bg-slate-800 text-white"
-              />
-            </div>
-            <div>
-              <label class="field-label"
-                >Valor (R$) <span class="req">*</span></label
-              >
-              <input
-                type="tel"
-                id="modalInputValor"
-                class="field bg-slate-800 text-white font-bold text-emerald-400"
-                placeholder="R$ 0,00"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div
-          style="
-            padding: 16px;
-            border-top: 1px solid #e2e8f0;
-            background: #f8fafc;
-          "
-        >
-          <button
-            id="btnConfirmarItem"
-            class="submit-button"
-            style="height: 44px; font-size: 14px"
-          >
-            <i class="fa-solid fa-plus"></i> Adicionar à OS
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- NOVO MODAL DE PLACA OPCIONAL -->
-    <div id="modalPlacaOpcional" class="modal-custom" style="z-index: 1600">
-      <div class="modal-box" onclick="event.stopPropagation()">
-        <div class="modal-header">
-          <span
-            ><i class="fa-solid fa-car text-indigo-600 mr-1"></i> Placa do
-            Veículo</span
-          >
-          <button
-            id="btnFecharModalPlaca"
-            style="
-              background: none;
-              border: none;
-              font-size: 20px;
-              color: #94a3b8;
-            "
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div
-          style="
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-          "
-        >
-          <div>
-            <label class="field-label">Placa (Opcional)</label>
-            <input
-              type="text"
-              id="inputPlacaOpcional"
-              class="field"
-              placeholder="Ex: ABC1D23"
-              maxlength="8"
-              autocomplete="off"
-            />
-          </div>
-        </div>
-        <div
-          style="
-            padding: 16px;
-            border-top: 1px solid #e2e8f0;
-            background: #f8fafc;
-          "
-        >
-          <button
-            id="btnSalvarPlacaOpcional"
-            class="submit-button"
-            style="height: 44px; font-size: 14px"
-          >
-            <i class="fa-solid fa-check"></i> Salvar Placa
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL DE DETALHES DO SERVIÇO -->
-    <div
-      id="modalDetalhesServico"
-      class="modal-custom"
-      style="z-index: 1500; display: none"
-    >
-      <div class="modal-box" onclick="event.stopPropagation()">
-        <div class="modal-header">
-          <span id="tituloModalDetalhes"
-            ><i class="fa-solid fa-sliders text-indigo-600 mr-1"></i> Detalhes
-            do Serviço</span
-          >
-          <button
-            id="btnFecharModalDetalhes"
-            style="
-              background: none;
-              border: none;
-              font-size: 20px;
-              color: #94a3b8;
-            "
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div
-          style="
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-          "
-        >
-          <div id="grupoCorModal">
-            <label for="inputCor" class="field-label"
-              >Cor <span class="req">*</span></label
-            >
-            <input
-              type="text"
-              id="inputCor"
-              class="field"
-              placeholder="Digite a cor"
-              autocomplete="off"
-            />
-          </div>
-          <div>
-            <label for="inputNumeroOSDinamico" class="field-label"
-              >Número da OS <span class="req">*</span></label
-            >
-            <input
-              type="text"
-              id="inputNumeroOSDinamico"
-              class="field"
-              placeholder="Digite o número da OS"
-              autocomplete="off"
-              inputmode="numeric"
-            />
-          </div>
-        </div>
-        <div
-          style="
-            padding: 16px;
-            border-top: 1px solid #e2e8f0;
-            background: #f8fafc;
-          "
-        >
-          <button
-            id="btnSalvarDetalhes"
-            class="submit-button"
-            style="height: 44px; font-size: 14px"
-          >
-            <i class="fa-solid fa-check"></i> Confirmar Detalhes
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL DE OPÇÕES GENÉRICO -->
-    <div id="customModal" class="modal-custom">
-      <div class="modal-box" onclick="event.stopPropagation()">
-        <div class="modal-header">
-          <span id="modalTitle">Selecione</span>
-          <button
-            id="btnFecharModalOpcoes"
-            style="
-              background: none;
-              border: none;
-              font-size: 20px;
-              color: #94a3b8;
-            "
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div id="modalList" class="modal-list"></div>
-      </div>
-    </div>
-
-    <!-- MODAL DE PESQUISA -->
-    <div
-      id="modalPesquisa"
-      class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-3"
-    >
-      <div
-        class="bg-white rounded-2xl flex flex-col overflow-hidden shadow-2xl w-full max-w-md h-[80vh]"
-      >
-        <div
-          class="bg-[#172033] text-white p-4 flex items-center justify-between flex-shrink-0"
-        >
-          <div class="flex items-center gap-2">
-            <i class="fa-solid fa-magnifying-glass text-indigo-400"></i>
-            <h2 class="text-sm font-bold">Pesquisar Ordem de Serviço</h2>
-          </div>
-          <button
-            type="button"
-            id="btnFecharPesquisa"
-            class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/20 transition-colors"
-          >
-            <i class="fa-solid fa-xmark text-sm"></i>
-          </button>
-        </div>
-
-        <div class="p-3 bg-slate-100 border-b border-slate-200 flex-shrink-0">
-          <div class="relative">
-            <i
-              class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"
-            ></i>
-            <input
-              id="inputBusca"
-              type="text"
-              class="field pl-8 uppercase"
-              placeholder="Digite o nome ou ID/nº do serviço..."
-            />
-          </div>
-        </div>
-
-        <div
-          id="listaResultados"
-          class="flex-1 overflow-y-auto p-3 flex flex-col gap-3 bg-slate-50"
-        >
-          <div class="text-center py-10 text-slate-400 text-xs">
-            <i class="fa-solid fa-clipboard text-2xl mb-2 text-slate-300"></i>
-            <p>Digite algo para pesquisar os serviços salvos.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL DE IMAGENS -->
-    <div
-      id="modalImagens"
-      class="fixed inset-0 z-[60] bg-black/95 hidden flex flex-col justify-between p-4"
-    >
-      <div
-        class="flex justify-between items-center text-white z-10 relative mt-8"
-      >
-        <span
-          id="contadorFotoModal"
-          class="text-sm font-semibold bg-white/10 px-3 py-1 rounded-full"
-          >1/1</span
-        >
-        <button
-          type="button"
-          id="btnFecharImagens"
-          class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition"
-        >
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
-      </div>
-
-      <div
-        class="flex-1 flex items-center justify-between relative py-4 overflow-hidden"
-        id="areaImagem"
-      >
-        <button
-          id="btnPrev"
-          class="absolute left-2 md:left-10 z-10 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-xl transition hidden"
-        >
-          <i class="fa-solid fa-chevron-left"></i>
-        </button>
-        <img
-          id="imagemAmpliada"
-          src=""
-          class="max-w-full max-h-full object-contain rounded-lg shadow-2xl mx-auto transition-opacity duration-200"
-          alt="Foto Ampliada"
-        />
-        <button
-          id="btnNext"
-          class="absolute right-2 md:right-10 z-10 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-xl transition hidden"
-        >
-          <i class="fa-solid fa-chevron-right"></i>
-        </button>
-      </div>
-
-      <div class="text-center text-slate-400 text-xs py-2 z-10 relative mb-4">
-        Deslize para os lados ou use as setas
-      </div>
-    </div>
-
-    <!-- CONTEÚDO PRINCIPAL -->
-    <div class="app">
-      <header class="app-header">
-        <div class="flex items-center gap-3">
-          <div
-            class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-white/10"
-          >
-            <i class="fa-solid fa-clipboard-list text-xl"></i>
-          </div>
-          <div class="min-w-0">
-            <h1 class="text-base font-bold leading-tight">OS Fácil</h1>
-            <p
-              class="mt-1 text-[10px] text-slate-300 flex items-center gap-1 cursor-pointer hover:text-white transition"
-              id="triggerAlterarNome"
-            >
-              <i class="fa-solid fa-mobile-screen text-[9px]"></i>
-              <span id="nomeAparelhoDisplay">Carregando...</span>
-              <i class="fa-solid fa-pen text-[8px] ml-1 opacity-50"></i>
-            </p>
-          </div>
-          <div class="ml-auto flex items-center gap-2">
+        <div class="actions-wrapper">
+          <div class="component-slot" id="cpf-slot"></div>
+          <div class="component-slot">
             <button
+              class="btn-base primary"
               type="button"
-              id="btnAbrirPesquisa"
-              onclick="window.location.replace('./os_painel/index.html')"
-              class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-1.5 px-3 rounded-lg shadow transition-colors"
+              id="btn-abrir-servico"
             >
-              <i class="fa-solid fa-table-list text-[10px]"></i>
-              <span class="hidden sm:inline">Painel OS</span>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+                />
+              </svg>
+              <span id="servico-label">Serviços</span>
             </button>
           </div>
+          <div class="component-slot" id="placa-slot"></div>
         </div>
-        <div class="header-step">
-          <div class="step-dot active" id="step1"></div>
-          <div class="step-dot" id="step2"></div>
-          <div class="step-dot" id="step3"></div>
-        </div>
-      </header>
 
-      <main class="app-main">
-        <form id="osForm" class="flex min-h-0 flex-1 flex-col gap-2" novalidate>
-          <section class="form-card" id="cardCliente">
-            <div class="mb-2 flex items-center gap-2">
-              <i class="fa-solid fa-user text-xs text-indigo-600"></i>
-              <h2 class="text-sm font-bold text-slate-800">Dados do cliente</h2>
-              <span class="field-hint" id="hintCliente">1 de 3</span>
-            </div>
-            <div class="mb-3">
-              <label for="nome" class="field-label"
-                >Nome do cliente (Opcional)</label
-              >
-              <div class="field-wrap">
-                <i class="fa-solid fa-user field-icon"></i>
-                <input
-                  id="nome"
-                  name="nome"
-                  class="field"
-                  type="text"
-                  placeholder="Consumidor"
-                  autocomplete="name"
-                />
-                <i
-                  class="fa-solid fa-circle-check field-status ok"
-                  id="statusNome"
-                  style="display: none"
-                ></i>
-              </div>
-            </div>
-            <div>
-              <label for="telefone" class="field-label"
-                >Telefone (Opcional)</label
-              >
-              <div class="flex gap-2">
-                <input type="hidden" id="paisDDI" value="+55" />
-                <button type="button" id="btnDDI" class="btn-ddi">
-                  🇧🇷 +55
-                </button>
-                <div class="field-wrap">
-                  <i class="fa-solid fa-phone field-icon"></i>
-                  <input
-                    id="telefone"
-                    name="telefone"
-                    class="field"
-                    type="tel"
-                    placeholder="(00) 00000-0000"
-                    autocomplete="tel"
-                    inputmode="tel"
-                  />
-                  <i
-                    class="fa-solid fa-circle-check field-status ok"
-                    id="statusTelefone"
-                    style="display: none"
-                  ></i>
-                </div>
-              </div>
-            </div>
-          </section>
+        <label class="obs-container">
+          <textarea
+            id="obs"
+            placeholder="Observações (opcional)..."
+            maxlength="250"
+          ></textarea>
+        </label>
 
-          <section class="form-card" id="cardServico">
-            <div class="mb-2 flex items-center gap-2">
-              <i
-                class="fa-solid fa-screwdriver-wrench text-xs text-indigo-600"
-              ></i>
-              <h2 class="text-sm font-bold text-slate-800">Dados do serviço</h2>
-              <span class="field-hint" id="hintServico">2 de 3</span>
-            </div>
+        <div id="upload-container"></div>
 
-            <!-- LISTA DE ITENS JÁ ADICIONADOS -->
-            <div
-              id="containerItensAdicionados"
-              class="flex flex-col gap-2 mb-3"
-            ></div>
+        <button type="submit" class="submit-btn">Enviar Pré-Cadastro</button>
+      </form>
+    </main>
 
-            <!-- BOTÕES LADO A LADO -->
-            <div class="flex gap-2 mb-3">
-              <!-- Botão Adicionar Serviço (Ocupa 2/3) -->
-              <button
-                type="button"
-                id="btnAdicionarItem"
-                class="flex-[2] h-12 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-md transition-colors flex items-center justify-center gap-2"
-              >
-                <i class="fa-solid fa-plus"></i> Adicionar Serviço
-              </button>
+    <div id="sheet-container"></div>
 
-              <!-- Botão Adicionar Placa (Ocupa 1/3) -->
-              <button
-                type="button"
-                id="btnAdicionarPlaca"
-                class="flex-1 h-12 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5"
-              >
-                <i class="fa-solid fa-car"></i> Placa
-              </button>
-            </div>
+    <script src="js/supabase_sdk.js"></script>
 
-            <div class="mt-3">
-              <label for="observacao" class="field-label"
-                >Descrição do serviço <span class="req">*</span></label
-              >
-              <textarea
-                id="observacao"
-                name="observacao"
-                class="field"
-                placeholder="Descreva o problema..."
-                required
-              ></textarea>
-            </div>
-          </section>
+    <script src="components/custom-alert.js"></script>
+    <script src="components/device-id.js"></script>
+    <script src="components/header.js"></script>
+    <script src="components/customer-info.js"></script>
+    <script src="components/morph-input-cpf.js"></script>
 
-          <section class="photo-section" id="photoSection">
-            <div class="mb-2 flex flex-shrink-0 items-center justify-between">
-              <div class="flex items-center gap-2">
-                <i class="fa-solid fa-camera text-xs text-indigo-600"></i>
-                <h2 class="text-sm font-bold text-slate-800">
-                  Fotos do serviço <span class="req">*</span>
-                </h2>
-              </div>
-              <span
-                id="photoCount"
-                class="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700"
-                >0/6 fotos</span
-              >
-            </div>
-            <p class="mb-2 flex-shrink-0 text-[11px] text-slate-500">
-              <i class="fa-solid fa-circle-info mr-1 text-indigo-400"></i>
-              Adicione pelo menos 1 foto.
-            </p>
-            <div id="photoGrid" class="photo-grid"></div>
-          </section>
-        </form>
-      </main>
+    <script type="module" src="components/morph-input-placa.js"></script>
+    <script type="module" src="components/service-sheet.js"></script>
+    <script type="module" src="components/image-upload.js"></script>
 
-      <footer class="app-footer">
-        <button
-          id="submitButton"
-          type="submit"
-          form="osForm"
-          class="submit-button"
-        >
-          <i class="fa-solid fa-check"></i> ENVIAR PRÉ-CADASTRO
-        </button>
-      </footer>
-    </div>
+    <script type="module">
+      import { osRepository } from "./js/os-repository.js";
+      import { osSync } from "./js/os-sync.js";
 
-    <!-- Bibliotecas e Módulo Principal -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-      (function setupCamera() {
-        if (
-          window.Capacitor &&
-          window.Capacitor.Plugins &&
-          window.Capacitor.Plugins.Camera
-        ) {
-          window.Camera = window.Capacitor.Plugins.Camera;
-        } else if (
-          window.Capacitor &&
-          typeof window.Capacitor.registerPlugin === "function"
-        ) {
+      AppHeader.init("header-container");
+      CustomerInfo.init("customer-info-container");
+      MorphInputCPF.init("cpf-slot");
+      MorphInputPlaca.init("placa-slot");
+      ServiceSheet.init(
+        "sheet-container",
+        "btn-abrir-servico",
+        "servico-label",
+      );
+      ImageUpload.init("upload-container");
+
+      const dados = {
+        nome: "",
+        telefone: "",
+        telefoneFormatado: "",
+        pais: "BR",
+        cpf: "",
+        placa: "",
+        servicos: [],
+        fotos: [],
+      };
+
+      document.addEventListener("customer-info-change", (e) => {
+        dados.nome = e.detail.nome;
+        dados.telefone = e.detail.telefone;
+        dados.telefoneFormatado = e.detail.telefoneFormatado;
+        dados.pais = e.detail.pais;
+      });
+      document.addEventListener("morph-cpf-change", (e) => {
+        dados.cpf = e.detail;
+      });
+      document.addEventListener("morph-placa-change", (e) => {
+        dados.placa = e.detail;
+      });
+      document.addEventListener("services-change", (e) => {
+        dados.servicos = e.detail;
+      });
+      document.addEventListener("images-change", (e) => {
+        dados.fotos = e.detail;
+      });
+
+      document
+        .getElementById("osForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          if (dados.servicos.length === 0) {
+            window.CustomAlert.show(
+              "Por favor, selecione pelo menos 1 serviço.",
+              "erro",
+            );
+            return;
+          }
+          if (dados.fotos.length === 0) {
+            window.CustomAlert.show(
+              "Por favor, adicione pelo menos 1 foto.",
+              "erro",
+            );
+            return;
+          }
+          if (
+            dados.telefone &&
+            dados.telefone.length > 0 &&
+            dados.telefone.length < 12
+          ) {
+            window.CustomAlert.show(
+              "Informe um telefone válido com DDD ou deixe em branco.",
+              "erro",
+            );
+            document.getElementById("ci-telefone").focus();
+            return;
+          }
+
+          const submitBtn = e.target.querySelector('button[type="submit"]');
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Salvando...";
+
           try {
-            window.Camera = window.Capacitor.registerPlugin("Camera");
-          } catch (_) {}
-        }
-      })();
+            const nomeFinal =
+              dados.nome && dados.nome.trim() !== ""
+                ? dados.nome.trim()
+                : "CONSUMIDOR";
+
+            await osRepository.salvar({
+              nome: nomeFinal,
+              telefone: dados.telefone,
+              telefoneFormatado: dados.telefoneFormatado,
+              pais: dados.pais,
+              cpf: dados.cpf,
+              placa: dados.placa,
+              observacao: document.getElementById("obs").value,
+              servicos: dados.servicos,
+              fotos: dados.fotos,
+              aparelho: DeviceId.get(),
+            });
+
+            if (navigator.onLine) osSync.enviarPendentes();
+
+            window.CustomAlert.show(
+              navigator.onLine
+                ? "Pré-cadastro salvo! Sincronizando..."
+                : "Sem internet. Salvo localmente.",
+              "sucesso",
+            );
+
+            // Limpeza
+            e.target.reset();
+            dados.nome = "";
+            dados.telefone = "";
+            dados.telefoneFormatado = "";
+            dados.pais = "BR";
+            dados.cpf = "";
+            dados.placa = "";
+            dados.servicos = [];
+            dados.fotos = [];
+
+            document.getElementById("customer-info-container").innerHTML = "";
+            CustomerInfo.init("customer-info-container");
+            document.getElementById("cpf-slot").innerHTML = "";
+            MorphInputCPF.init("cpf-slot");
+            document.getElementById("placa-slot").innerHTML = "";
+            MorphInputPlaca.init("placa-slot");
+            document.getElementById("upload-container").innerHTML = "";
+            ImageUpload.init("upload-container");
+
+            document.getElementById("servico-label").textContent = "Serviços";
+            document
+              .getElementById("btn-abrir-servico")
+              .classList.remove("filled");
+
+            if (window.ServiceSheet && window.ServiceSheet.limpar)
+              window.ServiceSheet.limpar();
+          } catch (err) {
+            console.error("Erro ao salvar pré-cadastro:", err);
+            window.CustomAlert.show(
+              "Erro ao salvar: " + (err.message || err),
+              "erro",
+            );
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Enviar Pré-Cadastro";
+          }
+        });
+
+      window.addEventListener("online", () => osSync.enviarPendentes());
+      if (navigator.onLine) osSync.enviarPendentes();
     </script>
-    <script type="module" src="./js/app.js"></script>
+
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("./service-worker.js")
+            .then((reg) => {
+              reg.update();
+            })
+            .catch((error) => {
+              console.error("Falha ao registrar PWA:", error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
