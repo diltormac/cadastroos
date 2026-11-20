@@ -2,7 +2,7 @@
    SERVICE WORKER — OS Fácil (Pré-Cadastro)
    ========================================================= */
 
-const VERSAO = "v15";
+const VERSAO = "v16";
 const CACHE_SHELL = `precadastro-shell-${VERSAO}`;
 const CACHE_CDN = `precadastro-cdn-${VERSAO}`;
 const CACHE_API = `precadastro-api-${VERSAO}`;
