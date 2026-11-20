@@ -328,6 +328,21 @@
             return;
           }
 
+          // ✅ VALIDAÇÃO: Cor obrigatória para REFORMA
+          const reformaSemCor = dados.servicos.find(
+            (s) =>
+              (s.nome || "").toUpperCase().trim() === "REFORMA" &&
+              !(s.cor && s.cor.trim()),
+          );
+          if (reformaSemCor) {
+            window.CustomAlert.show(
+              "Preencha a cor da roda em todos os serviços REFORMA.",
+              "erro",
+              "Cor obrigatória",
+            );
+            return;
+          }
+
           const submitBtn = e.target.querySelector('button[type="submit"]');
           submitBtn.disabled = true;
           submitBtn.textContent = "Salvando...";

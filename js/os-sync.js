@@ -105,9 +105,6 @@ export const osSync = {
             isConsertoOuSolda(s.nome),
           );
 
-          // FIX: antes era `temReforma ? null : find(...)` — lógica invertida
-          // que resultava sempre null. Agora pega o número do serviço REFORMA
-          // quando existir.
           const servicoReforma = servicosOriginais.find((s) =>
             isReforma(s.nome),
           );
@@ -122,17 +119,27 @@ export const osSync = {
             ? servicoConserto?.numero_os_conserto || null
             : null;
 
+          // Cor da primeira REFORMA que tiver cor preenchida
+          const primeiraCorReforma =
+            servicosOriginais.find((s) => isReforma(s.nome) && s.cor)?.cor ||
+            null;
+
           const itensServicosPayload = servicosOriginais.map((s) => ({
             servico: s.nome,
             valor: s.valor,
             quantidade: s.qtd,
             placa: os.placa || null,
-            cor: null,
+            cor: isReforma(s.nome) ? s.cor || null : null,
             numero_os: isReforma(s.nome) ? s.numero_os || null : null,
             numero_os_conserto: isConsertoOuSolda(s.nome)
               ? s.numero_os_conserto || null
               : null,
           }));
+
+          // Mesmo padrão do app.js: observacao = resumo + cor (se houver)
+          const observacaoComCor = primeiraCorReforma
+            ? `SERVIÇOS: ${servicosResumo} | COR: ${primeiraCorReforma}`
+            : `SERVIÇOS: ${servicosResumo}`;
 
           const cadastroFinal = {
             uuid_local: os.uuid_local,
@@ -143,11 +150,11 @@ export const osSync = {
             quantidade: qtdTotal,
             valor: valorTotal,
             itens_servicos: itensServicosPayload,
-            observacao: `SERVIÇOS: ${servicosResumo}`,
+            observacao: observacaoComCor,
             observacao_manual: os.observacao_manual || "",
             documento: os.documento || null,
             placa: os.placa || null,
-            cor: null,
+            cor: primeiraCorReforma,
             numero_os: numeroOSReforma,
             numero_os_conserto: numeroOSConserto,
             aparelho: resolverNomeAparelho(os),

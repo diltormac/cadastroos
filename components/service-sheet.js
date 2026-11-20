@@ -105,6 +105,61 @@ import { supabaseClient } from "../js/supabase.js";
     .service-empty { text-align: center; color: #9aa9c2; font-size: 14px; padding: 20px 0; }
     .service-sheet-footer button { width: 100%; height: 56px; border-radius: 14px; border: 0; background: #ffc400; color: #000; font-weight: bold; font-size: 16px; cursor: pointer; }
 
+    /* Cor da roda REFORMA — destaque obrigatório */
+    .reforma-cor-wrapper {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255, 196, 0, 0.06);
+      border: 1.5px solid rgba(255, 196, 0, 0.55);
+      border-radius: 10px; padding: 0 12px; height: 44px;
+      width: 100%; box-sizing: border-box;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .reforma-cor-wrapper:hover {
+      border-color: rgba(255, 196, 0, 0.85);
+      background: rgba(255, 196, 0, 0.09);
+    }
+    .reforma-cor-wrapper svg {
+      width: 18px; height: 18px; color: #ffc400; flex-shrink: 0;
+    }
+    .reforma-cor-wrapper .cor-label {
+      font-size: 10px; font-weight: 900; color: #ffc400;
+      letter-spacing: 0.6px; white-space: nowrap;
+      text-transform: uppercase;
+    }
+    .reforma-cor-wrapper .cor-label .obrig {
+      color: #ff5555; font-size: 12px;
+    }
+    .reforma-cor-wrapper input {
+      flex: 1; width: 0; min-width: 0;
+      background: transparent; border: 0; outline: 0;
+      color: #f4f7fc; font-size: 14px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .reforma-cor-wrapper input::placeholder {
+      color: #6b7a94; text-transform: none;
+      font-weight: 500; letter-spacing: 0;
+    }
+
+    .reforma-cor-wrapper.preenchido {
+      border-color: rgba(74, 222, 128, 0.6);
+      background: rgba(74, 222, 128, 0.06);
+    }
+    .reforma-cor-wrapper.preenchido svg { color: #4ade80; }
+    .reforma-cor-wrapper.preenchido .cor-label { color: #4ade80; }
+
+    .reforma-cor-wrapper.erro {
+      border-color: #ff4444;
+      background: rgba(255, 68, 68, 0.08);
+      animation: shakeCor 0.3s;
+    }
+    .reforma-cor-wrapper.erro svg,
+    .reforma-cor-wrapper.erro .cor-label { color: #ff5555; }
+    @keyframes shakeCor {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+
     @media (max-width: 380px) {
       .service-item-body { flex-wrap: wrap; }
       .service-item-total { width: 100%; justify-content: center; }
@@ -295,7 +350,6 @@ import { supabaseClient } from "../js/supabase.js";
         });
       };
 
-      // NOVO: separa a renderização do catálogo em função própria
       const renderCatalogo = (dbServices) => {
         if (dbServices.length === 0) {
           catalog.innerHTML =
@@ -329,6 +383,7 @@ import { supabaseClient } from "../js/supabase.js";
                 nome,
                 valor,
                 qtd: 1,
+                cor: isReforma(nome) ? "" : null,
                 numero_os: isReforma(nome) ? numero : null,
                 numero_os_conserto: isConsertoOuSolda(nome) ? numero : null,
               });
@@ -339,9 +394,7 @@ import { supabaseClient } from "../js/supabase.js";
         });
       };
 
-      // ALTERADO: mostra cache local IMEDIATAMENTE, sincroniza em background
       const loadCatalog = async () => {
-        // 1) Render instantâneo do cache local
         const locais = await db.catalogo_servicos.toArray();
         if (locais.length > 0) {
           renderCatalogo(locais);
@@ -350,7 +403,6 @@ import { supabaseClient } from "../js/supabase.js";
             '<span style="color: #8797b3; font-size: 12px; grid-column: 1 / -1; text-align: center;">Carregando...</span>';
         }
 
-        // 2) Sync em background — não bloqueia a UI
         sincronizarServicos().then(async (sincronizou) => {
           if (!sincronizou) {
             const cache = await db.catalogo_servicos.toArray();
@@ -418,6 +470,28 @@ import { supabaseClient } from "../js/supabase.js";
                 R$ ${totalItem.toFixed(2)}
               </div>
             </div>
+
+            ${
+              isReforma(s.nome)
+                ? `
+              <div class="reforma-cor-wrapper ${s.cor ? "preenchido" : ""}" data-cor-index="${i}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span class="cor-label">COR <span class="obrig">*</span></span>
+                <input
+                  type="text"
+                  class="input-cor-reforma"
+                  data-index="${i}"
+                  value="${s.cor || ""}"
+                  placeholder="PRATA, PRETO, GRAFITE..."
+                  maxlength="30"
+                >
+              </div>
+            `
+                : ""
+            }
           </div>
         `;
           })
@@ -450,6 +524,18 @@ import { supabaseClient } from "../js/supabase.js";
             const totalDiv = itemElement.querySelector(".service-item-total");
             const novoTotal = services[idx].qtd * services[idx].valor;
             totalDiv.textContent = `R$ ${novoTotal.toFixed(2)}`;
+          });
+        });
+
+        list.querySelectorAll(".input-cor-reforma").forEach((inputEl) => {
+          inputEl.addEventListener("input", (e) => {
+            const idx = e.currentTarget.dataset.index;
+            const val = e.currentTarget.value.toUpperCase();
+            services[idx].cor = val;
+
+            const wrapper = e.currentTarget.closest(".reforma-cor-wrapper");
+            wrapper.classList.toggle("preenchido", val.trim().length > 0);
+            wrapper.classList.remove("erro");
           });
         });
 
@@ -490,6 +576,7 @@ import { supabaseClient } from "../js/supabase.js";
           nome: val,
           valor: 0,
           qtd: 1,
+          cor: isReforma(val) ? "" : null,
           numero_os: isReforma(val) ? numero : null,
           numero_os_conserto: isConsertoOuSolda(val) ? numero : null,
         });
@@ -522,6 +609,40 @@ import { supabaseClient } from "../js/supabase.js";
       };
 
       const close = () => {
+        // Valida cor obrigatória em toda REFORMA
+        const reformasSemCor = services.filter(
+          (s) => isReforma(s.nome) && !(s.cor && s.cor.trim()),
+        );
+        if (reformasSemCor.length > 0) {
+          // Marca os wrappers em erro
+          list.querySelectorAll(".reforma-cor-wrapper").forEach((wrapper) => {
+            const idx = Number(wrapper.dataset.corIndex);
+            const item = services[idx];
+            if (isReforma(item?.nome) && !(item.cor && item.cor.trim())) {
+              wrapper.classList.add("erro");
+            }
+          });
+          // Scroll até o primeiro erro e foca
+          const primeiroErro = list.querySelector(".reforma-cor-wrapper.erro");
+          if (primeiroErro) {
+            primeiroErro.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+            const inputErro = primeiroErro.querySelector("input");
+            if (inputErro) setTimeout(() => inputErro.focus(), 300);
+          }
+          // Aviso
+          if (window.CustomAlert) {
+            window.CustomAlert.show(
+              `Informe a cor da roda em ${reformasSemCor.length === 1 ? "1 serviço REFORMA" : reformasSemCor.length + " serviços REFORMA"}.`,
+              "erro",
+              "Cor obrigatória",
+            );
+          }
+          return;
+        }
+
         overlay.classList.remove("open");
         document.body.style.overflow = "";
         const totalItens = services.reduce((acc, s) => acc + s.qtd, 0);
