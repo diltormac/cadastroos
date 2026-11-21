@@ -2,16 +2,17 @@
    SERVICE WORKER — OS Fácil (Pré-Cadastro)
    ========================================================= */
 
-const VERSAO = "v20";
+const VERSAO = "v21"; // 🔴 BUMP A CADA DEPLOY que altere HTML/JS/CSS
 const CACHE_SHELL = `precadastro-shell-${VERSAO}`;
 const CACHE_CDN = `precadastro-cdn-${VERSAO}`;
 const CACHE_API = `precadastro-api-${VERSAO}`;
 
 const TIMEOUT_REDE = 5000;
 
+// ⚠️ NÃO coloque "./" nem "./index.html" aqui.
+// O HTML deve ser SEMPRE buscado via network-first (navegacaoNetworkFirst).
+// Pré-cachear o HTML congela a versão na primeira instalação.
 const ASSETS_SHELL = [
-  "./",
-  "./index.html",
   "./manifest.json",
   "./js/db.js",
   "./js/dexie.min.mjs",
@@ -86,6 +87,9 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
+  // 0) service-worker.js NUNCA deve passar pelo SW (deixa o browser cuidar)
+  if (url.pathname.endsWith("/service-worker.js")) return;
+
   // 1) API do Supabase → network-first com fallback cache
   if (url.hostname === SUPABASE_HOST && url.pathname.startsWith("/rest/")) {
     event.respondWith(networkFirstComCache(req, CACHE_API, 8000));
@@ -152,7 +156,10 @@ async function networkFirstComCache(req, cacheName, timeoutMs) {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(req, { signal: controller.signal });
+    const res = await fetch(req, {
+      signal: controller.signal,
+      cache: "no-store", // ignora cache HTTP do CDN
+    });
     clearTimeout(timer);
 
     if (res && res.ok) {
@@ -177,7 +184,12 @@ async function navegacaoNetworkFirst(req) {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_REDE);
-    const res = await fetch(req, { signal: controller.signal });
+
+    // ⚠️ cache: "no-store" é o que fura o Cache-Control alto do GitHub Pages.
+    const res = await fetch(req, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
     clearTimeout(timer);
 
     if (res && res.ok) {

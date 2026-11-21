@@ -424,10 +424,16 @@
           try {
             const reg = await navigator.serviceWorker.register(
               "./service-worker.js",
+              { updateViaCache: "none" }, // ⚠️ força buscar SW sem cache HTTP
             );
 
             reg.update();
-            setInterval(() => reg.update(), 60 * 1000);
+            setInterval(() => reg.update(), 30 * 1000); // era 60s, agora 30s
+
+            // Checa update quando o usuário volta pro app
+            document.addEventListener("visibilitychange", () => {
+              if (document.visibilityState === "visible") reg.update();
+            });
 
             let recarregando = false;
             navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -445,6 +451,7 @@
                   document.getElementById("placa-label")?.textContent) ||
                 document.querySelector("#servicesList .service-item") ||
                 document.querySelector(".iu-preview-item");
+
               if (formSujo) {
                 if (
                   confirm(
