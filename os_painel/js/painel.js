@@ -1,6 +1,13 @@
 import { supabaseClient } from "../../js/supabase.js";
 import { painelDb } from "./painel-db.js";
 import { osCache } from "./os-cache.js";
+import { uiAlerta } from "./ui-alerta.js";
+import {
+  exportarBackupComSenha,
+  restaurarBackupArquivo,
+  solicitarSenhaBackup,
+  obterUltimoBackupTexto,
+} from "./backup-manager.js";
 
 const state = {
   dados: [],
@@ -32,6 +39,7 @@ async function carregarDoBancoOffline(statusExtra = "") {
     `${prefixo} · ${state.dados.length} OS${sufixo}`,
     isOffline,
   );
+  atualizarInfoBackup();
   render();
 }
 
@@ -67,6 +75,98 @@ async function sincronizarNovos(forcarIndicador = false) {
     if (forcarIndicador) {
       el("btnAtualizar").disabled = false;
     }
+  }
+}
+
+/* ---------------- Backup e Primeiro Acesso ---------------- */
+
+function atualizarInfoBackup() {
+  const infoEl = el("infoUltimoBackup");
+  if (infoEl) {
+    infoEl.textContent = obterUltimoBackupTexto();
+  }
+}
+
+async function acionarExportarBackup() {
+  const btn = el("btnExportarBackup");
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await exportarBackupComSenha((msg) => {
+      setStatusIndicator(msg, !navigator.onLine);
+    });
+
+    if (res.cancelado) return;
+    if (!res.ok) {
+      await uiAlerta(
+        "Aviso",
+        res.erro || "Não foi possível exportar o backup.",
+        "aviso",
+      );
+      return;
+    }
+
+    atualizarInfoBackup();
+    await uiAlerta(
+      "Backup concluído",
+      `Backup gerado com sucesso (${res.total} OS).`,
+      "sucesso",
+    );
+  } catch (err) {
+    console.error("Erro ao exportar backup:", err);
+    await uiAlerta("Erro ao exportar", err.message || String(err), "erro");
+  } finally {
+    if (btn) btn.disabled = false;
+    await carregarDoBancoOffline();
+  }
+}
+
+async function solicitarRestauracaoComSenha() {
+  const autorizado = await solicitarSenhaBackup("restaurar o backup");
+  if (!autorizado) return;
+  el("inputRestaurarBackup")?.click();
+}
+
+async function acionarRestaurarBackup(arquivo) {
+  if (!arquivo) return;
+
+  const btnTopo = el("btnRestaurarBackup");
+  const btnInicial = el("btnInicialRestaurar");
+  if (btnTopo) btnTopo.disabled = true;
+  if (btnInicial) btnInicial.disabled = true;
+
+  try {
+    const res = await restaurarBackupArquivo(arquivo, (msg) => {
+      setStatusIndicator(msg, !navigator.onLine);
+    });
+
+    if (!res.ok) {
+      await uiAlerta(
+        "Aviso",
+        res.erro || "Falha ao restaurar backup.",
+        "aviso",
+      );
+      return;
+    }
+
+    await carregarDoBancoOffline(`${res.importados} OS restaurada(s)`);
+    await uiAlerta(
+      "Restauração concluída",
+      `Backup restaurado com sucesso (${res.importados} OS).`,
+      "sucesso",
+    );
+
+    if (navigator.onLine) {
+      await sincronizarNovos(false);
+    }
+  } catch (err) {
+    console.error("Erro ao restaurar backup:", err);
+    await uiAlerta("Erro ao restaurar", err.message || String(err), "erro");
+  } finally {
+    if (btnTopo) btnTopo.disabled = false;
+    if (btnInicial) btnInicial.disabled = false;
+    el("inputRestaurarBackup").value = "";
+    await carregarDoBancoOffline();
   }
 }
 
@@ -234,10 +334,20 @@ function render() {
       .join("");
   if (aparelhos.includes(atual)) selAp.value = atual;
 
+  const boxPrimeiro = el("boxPrimeiroAcesso");
+  const container = el("cards");
+
+  if (state.dados.length === 0) {
+    if (boxPrimeiro) boxPrimeiro.style.display = "block";
+    container.innerHTML = "";
+    atualizarKpis([]);
+    return;
+  }
+
+  if (boxPrimeiro) boxPrimeiro.style.display = "none";
+
   const lista = filtrados();
   atualizarKpis(lista);
-
-  const container = el("cards");
 
   if (!lista.length) {
     container.innerHTML = `<div class="empty-box">Nenhuma Ordem de Serviço encontrada no banco local para os filtros aplicados.</div>`;
@@ -521,7 +631,7 @@ async function atualizarOS(os, patch) {
     fecharModal();
     render();
   } catch (e) {
-    alert("Falha ao atualizar OS: " + (e.message || e));
+    await uiAlerta("Falha ao atualizar OS", e.message || String(e), "erro");
     btns.forEach((b) => (b.disabled = false));
   }
 }
@@ -564,6 +674,23 @@ el("btnLimparFiltros").addEventListener("click", () => {
 });
 
 el("btnAtualizar").addEventListener("click", () => sincronizarNovos(true));
+el("btnInicialSupabase")?.addEventListener("click", () =>
+  sincronizarNovos(true),
+);
+
+el("btnRestaurarBackup")?.addEventListener(
+  "click",
+  solicitarRestauracaoComSenha,
+);
+el("btnInicialRestaurar")?.addEventListener(
+  "click",
+  solicitarRestauracaoComSenha,
+);
+el("inputRestaurarBackup")?.addEventListener("change", (e) => {
+  acionarRestaurarBackup(e.target.files?.[0]);
+});
+
+el("btnExportarBackup")?.addEventListener("click", acionarExportarBackup);
 
 el("btnLightboxFechar").addEventListener("click", fecharLightbox);
 el("btnLightboxPrev").addEventListener("click", () => navegarLightbox(-1));
@@ -601,7 +728,7 @@ window.addEventListener("offline", async () => {
 });
 
 // 1. Exibe imediatamente o que já está no OsPainelDB
-// 2. Baixa apenas OS que faltam (enquanto estava offline) e abre o Realtime
+// 2. Baixa apenas OS que faltam e abre o Realtime
 carregarDoBancoOffline().then(async () => {
   await sincronizarNovos(false);
   iniciarRealtime();
