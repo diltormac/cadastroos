@@ -2,7 +2,7 @@
    SERVICE WORKER — OS Fácil (Pré-Cadastro)
    ========================================================= */
 
-const VERSAO = "v22"; // 🔴 BUMP A CADA DEPLOY que altere HTML/JS/CSS
+const VERSAO = "v23"; // 🔴 BUMP A CADA DEPLOY que altere HTML/JS/CSS
 const CACHE_SHELL = `precadastro-shell-${VERSAO}`;
 const CACHE_CDN = `precadastro-cdn-${VERSAO}`;
 const CACHE_API = `precadastro-api-${VERSAO}`;
