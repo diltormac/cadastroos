@@ -1,6 +1,10 @@
 import { uiAlerta } from "./ui-alerta.js";
 import { montarHeaderPainel } from "./painel-header.js";
-import { montarKpisPainel, atualizarKpisPainel } from "./painel-kpis.js";
+import {
+  montarKpisPainel,
+  atualizarKpisPainel,
+  definirFiltroKpiAtivo,
+} from "./painel-kpis.js";
 import { criarModalDetalhesOS } from "./painel-modal-os.js";
 import { criarLightboxPainel } from "./painel-lightbox.js";
 import { criarGaleriaOffline } from "./painel-galeria-offline.js";
@@ -8,8 +12,23 @@ import { criarGerenciadorSync } from "./painel-sync.js";
 import { criarGerenciadorBackup } from "./painel-backup.js";
 import { criarGerenciadorCards } from "./painel-cards.js";
 
+const el = (id) => document.getElementById(id);
+
+let filtroKpiAtivo = "";
+let galeriaOffline = null;
+let gerenciadorCards = null;
+
 montarHeaderPainel("#headerSlot");
-montarKpisPainel("#kpisSlot");
+montarKpisPainel("#kpisSlot", (tipoFiltro) => {
+  filtroKpiAtivo = tipoFiltro || "";
+  if (el("fStatus")) {
+    el("fStatus").value =
+      tipoFiltro === "Pendente" || tipoFiltro === "Em andamento"
+        ? tipoFiltro
+        : "";
+  }
+  gerenciadorCards?.render();
+});
 
 const state = {
   dados: [],
@@ -18,8 +37,6 @@ const state = {
   canalRealtime: null,
   realtimeAtivo: false,
 };
-
-const el = (id) => document.getElementById(id);
 
 function setStatusIndicator(texto, isOffline) {
   el("statusTexto").textContent = texto;
@@ -47,9 +64,6 @@ function brl(n) {
   });
 }
 
-let galeriaOffline = null;
-let gerenciadorCards = null;
-
 const lightbox = criarLightboxPainel();
 
 galeriaOffline = criarGaleriaOffline({
@@ -67,6 +81,7 @@ gerenciadorCards = criarGerenciadorCards({
   state,
   modalOS,
   atualizarKpisPainel,
+  getFiltroKpi: () => filtroKpiAtivo,
   esc,
   brl,
   getEl: el,
@@ -92,10 +107,25 @@ const gerenciadorBackup = criarGerenciadorBackup({
 /* ---------------- Eventos Globais ---------------- */
 
 ["fBusca", "fStatus", "fFinal", "fAparelho"].forEach((id) =>
-  el(id).addEventListener("input", gerenciadorCards.render),
+  el(id).addEventListener("input", () => {
+    if (id === "fStatus") {
+      const valStatus = el("fStatus")?.value || "";
+      if (
+        filtroKpiAtivo &&
+        filtroKpiAtivo !== "Prontas" &&
+        valStatus !== filtroKpiAtivo
+      ) {
+        filtroKpiAtivo = "";
+        definirFiltroKpiAtivo("");
+      }
+    }
+    gerenciadorCards.render();
+  }),
 );
 
 el("btnLimparFiltros").addEventListener("click", () => {
+  filtroKpiAtivo = "";
+  definirFiltroKpiAtivo("");
   el("fBusca").value = "";
   el("fStatus").value = "";
   el("fFinal").value = "";

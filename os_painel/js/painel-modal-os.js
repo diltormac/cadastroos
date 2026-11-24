@@ -32,6 +32,18 @@ function brl(n) {
   });
 }
 
+function calcularStatusPorDocumentos(draft) {
+  if (draft?.status === "Cancelado") {
+    return "Cancelado";
+  }
+  if (String(draft?.numero_venda || "").trim()) return "Concluído";
+  if (String(draft?.registro_os || "").trim()) return "Em andamento";
+  return "Pendente";
+}
+
+const inputSoftStyle =
+  "width:100%;box-sizing:border-box;background:#fff;color:#1a1f26;border:1px solid #d0d5db;border-radius:6px;padding:7px 10px;font-size:13px;outline:none";
+
 export function criarModalDetalhesOS({
   overlayId = "modalOverlay",
   conteudoId = "modalConteudo",
@@ -77,7 +89,6 @@ export function criarModalDetalhesOS({
     if (!draft || !conteudo) return;
 
     const getVal = (id) => conteudo.querySelector(`#${id}`)?.value ?? "";
-    const getChk = (id) => Boolean(conteudo.querySelector(`#${id}`)?.checked);
 
     draft.nome = getVal("editNome").toUpperCase();
     draft.telefone = getVal("editTelefone");
@@ -85,10 +96,12 @@ export function criarModalDetalhesOS({
     draft.placa = getVal("editPlaca").toUpperCase();
     draft.aparelho = getVal("editAparelho");
     draft.cor = getVal("editCor").toUpperCase();
-    draft.numero_os = getVal("editNumeroOs");
-    draft.numero_os_conserto = getVal("editNumeroOsConserto");
-    draft.status = getVal("editStatus");
-    draft.servico_finalizado = getChk("editFinalizado");
+    draft.numero_os = getVal("editNumeroOs").trim();
+    draft.numero_os_conserto = getVal("editNumeroOsConserto").trim();
+    draft.registro_os = getVal("editRegistroOs").trim().toUpperCase();
+    draft.numero_venda = getVal("editNumeroVenda").trim().toUpperCase();
+    draft.status = calcularStatusPorDocumentos(draft);
+    draft.servico_finalizado = draft.status === "Concluído";
     draft.observacao = getVal("editObservacao");
     draft.observacao_manual = getVal("editObservacaoManual");
     draft.desconto = Number(getVal("editDesconto") || 0);
@@ -154,6 +167,9 @@ export function criarModalDetalhesOS({
       .map((s) => `<option value="${esc(s.nome)}"></option>`)
       .join("");
 
+    const estaCancelada = draft.status === "Cancelado";
+    const corStatus = estaCancelada ? "#b91c1c" : "#1f5fbf";
+
     const linhasItens = draft.itens_servicos
       .map((item, idx) => {
         const calc = totais.itens[idx] || {
@@ -165,17 +181,17 @@ export function criarModalDetalhesOS({
         return `
           <tr data-item-idx="${idx}">
             <td>
-              <input type="text" list="datalistCatalogoServicos" class="item-servico" value="${esc(item.servico ?? item.nome ?? "")}" placeholder="Selecione ou digite..." ${podeEditar ? "" : "disabled"} />
+              <input type="text" list="datalistCatalogoServicos" class="item-servico" style="${inputSoftStyle}" value="${esc(item.servico ?? item.nome ?? "")}" placeholder="Serviço / produto" ${podeEditar ? "" : "disabled"} />
             </td>
-            <td style="width:88px">
-              <input type="number" min="1" step="1" class="mono item-qtd" value="${esc(calc.quantidade)}" ${podeEditar ? "" : "disabled"} />
+            <td>
+              <input type="number" min="1" step="1" class="mono item-qtd" style="${inputSoftStyle};padding:7px 6px;text-align:center" value="${esc(calc.quantidade)}" ${podeEditar ? "" : "disabled"} />
             </td>
-            <td style="width:128px">
-              <input type="number" min="0" step="0.01" class="mono item-unit" value="${esc(calc.valor_unitario)}" ${podeEditar ? "" : "disabled"} />
+            <td>
+              <input type="number" min="0" step="0.01" class="mono item-unit" style="${inputSoftStyle};padding:7px 8px;text-align:right" value="${esc(calc.valor_unitario)}" ${podeEditar ? "" : "disabled"} />
             </td>
-            <td class="mono item-total-cell">${brl(calc.valor)}</td>
-            <td style="width:44px;text-align:center">
-              <button type="button" class="btn btn-remover-item" data-del-idx="${idx}" title="Excluir item" ${podeEditar ? "" : "disabled"}>×</button>
+            <td class="mono item-total-cell" style="white-space:nowrap">${brl(calc.valor)}</td>
+            <td style="text-align:center;padding-left:0;padding-right:4px">
+              <button type="button" class="btn btn-remover-item" data-del-idx="${idx}" title="Excluir item" style="padding:4px 8px;min-width:0" ${podeEditar ? "" : "disabled"}>×</button>
             </td>
           </tr>
         `;
@@ -205,60 +221,74 @@ export function criarModalDetalhesOS({
         <button class="btn-close" id="btnFechar" type="button" aria-label="Fechar">×</button>
       </div>
 
-      <div class="props-grid">
+      <div class="section-heading" style="margin-top:16px">Dados do Cliente e Veículo</div>
+      <div class="props-grid" style="padding:14px;margin-top:8px">
         <div class="prop-item">
           <label for="editNome">Cliente</label>
-          <input id="editNome" type="text" value="${esc(draft.nome)}" ${podeEditar ? "" : "disabled"} />
+          <input id="editNome" type="text" style="${inputSoftStyle}" value="${esc(draft.nome)}" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item">
-          <label for="editTelefone">Telefone (BR / PY)</label>
-          <input id="editTelefone" type="tel" class="mono" value="${esc(draft.telefone)}" placeholder="+55 (00) 00000-0000" ${podeEditar ? "" : "disabled"} />
+          <label for="editTelefone">Telefone</label>
+          <input id="editTelefone" type="tel" class="mono" style="${inputSoftStyle}" value="${esc(draft.telefone)}" placeholder="+55 (00) 00000-0000" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item">
-          <label for="editDocumento">Documento (CPF)</label>
-          <input id="editDocumento" type="text" class="mono" maxlength="14" value="${esc(draft.documento)}" placeholder="000.000.000-00" ${podeEditar ? "" : "disabled"} />
+          <label for="editDocumento">Documento</label>
+          <input id="editDocumento" type="text" class="mono" maxlength="14" style="${inputSoftStyle}" value="${esc(draft.documento)}" placeholder="000.000.000-00" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item">
           <label for="editPlaca" style="display:flex;justify-content:space-between;align-items:center">
             <span>Placa</span>
-            <button type="button" id="btnModoPlaca" class="mono" style="font-size:10px;padding:1px 6px;border-radius:5px;border:1px solid var(--border-strong);background:var(--glass);color:var(--accent);cursor:pointer" ${podeEditar ? "" : "disabled"}>MERCOSUL</button>
+            <button type="button" id="btnModoPlaca" class="mono" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid #d0d5db;background:#fff;color:#1f5fbf;cursor:pointer" ${podeEditar ? "" : "disabled"}>MERCOSUL</button>
           </label>
-          <input id="editPlaca" type="text" class="mono" maxlength="7" value="${esc(draft.placa)}" placeholder="ABC1D23" ${podeEditar ? "" : "disabled"} />
+          <input id="editPlaca" type="text" class="mono" maxlength="7" style="${inputSoftStyle}" value="${esc(draft.placa)}" placeholder="ABC1D23" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item">
-          <label for="editAparelho">Aparelho / Veículo</label>
-          <input id="editAparelho" type="text" value="${esc(draft.aparelho)}" ${podeEditar ? "" : "disabled"} />
+          <label for="editAparelho">Veículo / Aparelho</label>
+          <input id="editAparelho" type="text" style="${inputSoftStyle}" value="${esc(draft.aparelho)}" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item">
           <label for="editCor">Cor</label>
-          <input id="editCor" type="text" value="${esc(draft.cor)}" placeholder="PRATA, PRETO, GRAFITE..." ${podeEditar ? "" : "disabled"} />
-        </div>
-        <div class="prop-item">
-          <label for="editNumeroOs">Nº OS Reforma</label>
-          <input id="editNumeroOs" type="text" class="mono" value="${esc(draft.numero_os)}" ${podeEditar ? "" : "disabled"} />
-        </div>
-        <div class="prop-item">
-          <label for="editNumeroOsConserto">Nº OS Conserto</label>
-          <input id="editNumeroOsConserto" type="text" class="mono" value="${esc(draft.numero_os_conserto)}" ${podeEditar ? "" : "disabled"} />
-        </div>
-        <div class="prop-item">
-          <label for="editStatus">Status</label>
-          <input id="editStatus" type="text" value="${esc(draft.status)}" ${podeEditar ? "" : "disabled"} />
-        </div>
-        <div class="prop-item">
-          <label for="editFinalizado">Finalizado</label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input id="editFinalizado" type="checkbox" ${draft.servico_finalizado ? "checked" : ""} ${podeEditar ? "" : "disabled"} />
-            <span>Serviço finalizado</span>
-          </label>
+          <input id="editCor" type="text" style="${inputSoftStyle}" value="${esc(draft.cor)}" placeholder="PRATA, PRETO..." ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item full">
           <label for="editObservacao">Observação</label>
-          <input id="editObservacao" type="text" value="${esc(draft.observacao)}" ${podeEditar ? "" : "disabled"} />
+          <input id="editObservacao" type="text" style="${inputSoftStyle}" value="${esc(draft.observacao)}" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item full">
           <label for="editObservacaoManual">Observação Manual</label>
-          <input id="editObservacaoManual" type="text" value="${esc(draft.observacao_manual)}" ${podeEditar ? "" : "disabled"} />
+          <input id="editObservacaoManual" type="text" style="${inputSoftStyle}" value="${esc(draft.observacao_manual)}" ${podeEditar ? "" : "disabled"} />
+        </div>
+      </div>
+
+      <div class="section-heading">Controle da OS e Status</div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:14px;margin-top:8px;border:1px solid #e3e6ea;border-radius:10px;background:#fafbfc">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
+          <div class="prop-item">
+            <label for="editNumeroOs">Nº OS Reforma</label>
+            <input id="editNumeroOs" type="text" class="mono" style="${inputSoftStyle}" value="${esc(draft.numero_os)}" placeholder="Ex: 5907" ${podeEditar ? "" : "disabled"} />
+          </div>
+          <div class="prop-item">
+            <label for="editNumeroOsConserto">Nº OS Conserto</label>
+            <input id="editNumeroOsConserto" type="text" class="mono" style="${inputSoftStyle}" value="${esc(draft.numero_os_conserto)}" placeholder="Ex: 6201" ${podeEditar ? "" : "disabled"} />
+          </div>
+        </div>
+
+        <div style="border-top:1px dashed #d8dee6;padding-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
+          <div class="prop-item">
+            <label for="editRegistroOs">Registro OS <span style="font-weight:400;color:#7a8494">(Em andamento)</span></label>
+            <input id="editRegistroOs" type="text" class="mono" style="${inputSoftStyle}" value="${esc(draft.registro_os)}" placeholder="Ex: 0000" ${podeEditar ? "" : "disabled"} />
+          </div>
+          <div class="prop-item">
+            <label for="editNumeroVenda">Nº Venda <span style="font-weight:400;color:#7a8494">(Concluído)</span></label>
+            <input id="editNumeroVenda" type="text" class="mono" style="${inputSoftStyle}" value="${esc(draft.numero_venda)}" placeholder="Ex: 000000" ${podeEditar ? "" : "disabled"} />
+          </div>
+          <div class="prop-item">
+            <label for="editStatus">Status</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input id="editStatus" type="text" readonly style="${inputSoftStyle};background:#f3f4f6;color:${corStatus};font-weight:600;cursor:default" value="${esc(draft.status)}" />
+              <button type="button" id="btnToggleCancelar" class="btn" style="padding:7px 10px;font-size:12px;white-space:nowrap" ${podeEditar ? "" : "disabled"}>${estaCancelada ? "Reativar" : "Cancelar"}</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -267,53 +297,41 @@ export function criarModalDetalhesOS({
         <button id="btnAdicionarItem" class="btn" type="button" ${podeEditar ? "" : "disabled"}>+ Adicionar item</button>
       </div>
 
-      <div class="items-table-wrap">
-        <table class="items-table">
+      <div class="items-table-wrap" style="overflow-x:hidden">
+        <table class="items-table" style="table-layout:fixed;width:100%">
           <thead>
             <tr>
               <th>Serviço / Produto</th>
-              <th>Qtd</th>
-              <th>Valor Unit.</th>
-              <th>Valor</th>
-              <th></th>
+              <th style="width:66px">Qtd</th>
+              <th style="width:102px">Unit.</th>
+              <th style="width:106px">Valor</th>
+              <th style="width:38px"></th>
             </tr>
           </thead>
           <tbody>
-            ${linhasItens || '<tr><td colspan="5" style="text-align:center;color:var(--muted)">Nenhum item adicionado</td></tr>'}
+            ${linhasItens || '<tr><td colspan="5" style="text-align:center;color:#7a8494">Nenhum item adicionado</td></tr>'}
           </tbody>
         </table>
       </div>
 
-      <div class="items-resumo" style="display:flex;justify-content:flex-end;align-items:center;gap:20px;flex-wrap:wrap;margin-top:10px;padding:10px 14px;border-radius:10px;background:var(--glass);border:1px solid var(--border-strong)">
-        <div><span style="color:var(--muted);font-size:12px">Subtotal:</span> <strong id="resumoSubtotal" class="mono">${brl(totais.subtotal)}</strong></div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
-          <span>Desconto (R$):</span>
-          <input id="editDesconto" type="number" min="0" step="0.01" class="mono" style="width:110px" value="${esc(totais.desconto)}" ${podeEditar ? "" : "disabled"} />
+      <div class="items-resumo" style="display:flex;justify-content:flex-end;align-items:center;gap:18px;flex-wrap:wrap;margin-top:10px;padding:10px 14px;border-radius:8px;background:#fafbfc;border:1px solid #e3e6ea">
+        <div><span style="color:#7a8494;font-size:12px">Subtotal:</span> <strong id="resumoSubtotal" class="mono">${brl(totais.subtotal)}</strong></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#7a8494">
+          <span>Desconto:</span>
+          <input id="editDesconto" type="number" min="0" step="0.01" class="mono" style="${inputSoftStyle};width:96px;padding:5px 8px;text-align:right" value="${esc(totais.desconto)}" ${podeEditar ? "" : "disabled"} />
         </label>
-        <div><span style="color:var(--muted);font-size:12px">Total:</span> <strong id="resumoTotal" class="mono">${brl(totais.valorFinal)}</strong></div>
+        <div><span style="color:#7a8494;font-size:12px">Total:</span> <strong id="resumoTotal" class="mono">${brl(totais.valorFinal)}</strong></div>
       </div>
 
       <div class="section-heading">Galeria de Fotos (Local)</div>
-      <div class="modal-gallery">${fotos || '<span style="color:var(--muted);font-size:13px">Nenhuma foto salva localmente nesta OS.</span>'}</div>
+      <div class="modal-gallery">${fotos || '<span style="color:#7a8494;font-size:13px">Nenhuma foto salva localmente nesta OS.</span>'}</div>
 
       <div class="modal-actions">
         ${
           podeEditar
-            ? `
-              <div style="display:flex;gap:10px;flex-wrap:wrap;width:100%;justify-content:space-between;align-items:center">
-                <div style="display:flex;gap:10px;flex-wrap:wrap">
-                  <button id="btnSalvarAlteracoes" class="btn btn-primary" type="button">Salvar alterações</button>
-                  <button id="btnFinalizar" class="btn" type="button">
-                    ${draft.servico_finalizado ? "↺ Reabrir serviço" : "✓ Finalizar serviço"}
-                  </button>
-                  <button id="btnMarcarPendente" class="btn" type="button">Definir como Pendente</button>
-                </div>
-              </div>`
-            : `
-              <div style="display:flex;gap:10px;flex-wrap:wrap">
-                <button class="btn" type="button" disabled>Salvar alterações</button>
-              </div>
-              <div class="offline-banner">Modo offline: consulta e fotos locais ativas; alterações bloqueadas sem internet.</div>`
+            ? `<button id="btnSalvarAlteracoes" class="btn btn-primary" type="button">Salvar alterações</button>`
+            : `<button class="btn" type="button" disabled>Salvar alterações</button>
+               <div class="offline-banner">Modo offline: consulta e fotos locais ativas; alterações bloqueadas sem internet.</div>`
         }
       </div>
     `;
@@ -333,7 +351,46 @@ export function criarModalDetalhesOS({
 
     if (!podeEditar || typeof onAtualizarOS !== "function") return;
 
-    // Máscaras e controlador de placa dos componentes originais
+    const atualizarStatusNaTela = () => {
+      const inpStatus = conteudo.querySelector("#editStatus");
+      const vendaVal = conteudo.querySelector("#editNumeroVenda")?.value || "";
+      const regVal = conteudo.querySelector("#editRegistroOs")?.value || "";
+
+      if (draft.status !== "Cancelado") {
+        draft.status = vendaVal.trim()
+          ? "Concluído"
+          : regVal.trim()
+            ? "Em andamento"
+            : "Pendente";
+      }
+
+      if (inpStatus) {
+        inpStatus.value = draft.status;
+        inpStatus.style.color =
+          draft.status === "Cancelado" ? "#b91c1c" : "#1f5fbf";
+      }
+    };
+
+    conteudo
+      .querySelector("#btnToggleCancelar")
+      ?.addEventListener("click", () => {
+        draft.status = draft.status === "Cancelado" ? "" : "Cancelado";
+        atualizarStatusNaTela();
+        const btnCancel = conteudo.querySelector("#btnToggleCancelar");
+        if (btnCancel) {
+          btnCancel.textContent =
+            draft.status === "Cancelado" ? "Reativar" : "Cancelar";
+        }
+      });
+
+    conteudo
+      .querySelector("#editRegistroOs")
+      ?.addEventListener("input", atualizarStatusNaTela);
+
+    conteudo
+      .querySelector("#editNumeroVenda")
+      ?.addEventListener("input", atualizarStatusNaTela);
+
     const inpCpf = conteudo.querySelector("#editDocumento");
     inpCpf?.addEventListener("input", (e) => {
       e.target.value = maskCPF(e.target.value);
@@ -359,7 +416,6 @@ export function criarModalDetalhesOS({
       });
     }
 
-    // Preenchimento automático de preço do catálogo e nº livre de Reforma/Conserto
     conteudo.querySelectorAll(".item-servico").forEach((inp) => {
       inp.addEventListener("change", async (e) => {
         const tr = e.target.closest("tr[data-item-idx]");
@@ -441,31 +497,13 @@ export function criarModalDetalhesOS({
         const patch = montarPatchOS(draft);
         onAtualizarOS(osAtual, patch);
       });
-
-    conteudo.querySelector("#btnFinalizar")?.addEventListener("click", () => {
-      sincronizarCamposDoDom(conteudo);
-      const novoFinalizado = !draft.servico_finalizado;
-      draft.servico_finalizado = novoFinalizado;
-      draft.status = novoFinalizado ? "Finalizado" : "Pendente";
-      const patch = montarPatchOS(draft);
-      onAtualizarOS(osAtual, patch);
-    });
-
-    conteudo
-      .querySelector("#btnMarcarPendente")
-      ?.addEventListener("click", () => {
-        sincronizarCamposDoDom(conteudo);
-        draft.servico_finalizado = false;
-        draft.status = "Pendente";
-        const patch = montarPatchOS(draft);
-        onAtualizarOS(osAtual, patch);
-      });
   }
 
   async function abrir(o) {
     if (!o) return;
     osAtual = o;
-    draft = {
+
+    const baseDraft = {
       nome: o.nome || "",
       telefone: o.telefone || "",
       documento: o.documento || "",
@@ -474,8 +512,9 @@ export function criarModalDetalhesOS({
       cor: o.cor || "",
       numero_os: o.numero_os || "",
       numero_os_conserto: o.numero_os_conserto || "",
-      status: o.status || (o.servico_finalizado ? "Finalizado" : "Pendente"),
-      servico_finalizado: Boolean(o.servico_finalizado),
+      registro_os: o.registro_os || "",
+      numero_venda: o.numero_venda || "",
+      status: o.status === "Cancelado" ? "Cancelado" : "",
       observacao: o.observacao || "",
       observacao_manual: o.observacao_manual || "",
       servico: o.servico || "",
@@ -484,6 +523,11 @@ export function criarModalDetalhesOS({
         ? o.itens_servicos.map((it) => ({ ...it }))
         : [],
     };
+
+    baseDraft.status = calcularStatusPorDocumentos(baseDraft);
+    baseDraft.servico_finalizado = baseDraft.status === "Concluído";
+
+    draft = baseDraft;
     render();
     catalogoServicos = await carregarCatalogoServicos();
     if (estaAberto() && osAtual === o) {

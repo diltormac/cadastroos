@@ -2,11 +2,70 @@ import { supabaseClient } from "../../js/supabase.js";
 import { painelDb } from "./painel-db.js";
 import { osCache } from "./os-cache.js";
 import { uiAlerta } from "./ui-alerta.js";
+import { classificarStatusKpi, isOsProntaRetirada } from "./painel-kpis.js";
+
+function isOsFinalizadaCard(o) {
+  if (!o || o.status === "Cancelado") return false;
+  return String(o?.numero_venda || "").trim().length > 0;
+}
+
+function obterEstiloStatusCard(o) {
+  const statusRaw = String(o?.status || "").trim();
+  const temVenda = String(o?.numero_venda || "").trim().length > 0;
+  const temRegistro = String(o?.registro_os || "").trim().length > 0;
+
+  if (statusRaw === "Cancelado") {
+    return {
+      slug: "cancelado",
+      texto: "Cancelado",
+      isDone: false,
+      borda: "#dc2626",
+      bg: "#fef2f2",
+      cor: "#b91c1c",
+      bordaPill: "#fecaca",
+    };
+  }
+
+  if (temVenda) {
+    return {
+      slug: "concluido",
+      texto: "Concluído",
+      isDone: true,
+      borda: "#16a34a",
+      bg: "#f0fdf4",
+      cor: "#15803d",
+      bordaPill: "#bbf7d0",
+    };
+  }
+
+  if (temRegistro || statusRaw === "Em andamento") {
+    return {
+      slug: "andamento",
+      texto: "Em andamento",
+      isDone: false,
+      borda: "#2563eb",
+      bg: "#eff6ff",
+      cor: "#1d4ed8",
+      bordaPill: "#bfdbfe",
+    };
+  }
+
+  return {
+    slug: "pendente",
+    texto: "Pendente",
+    isDone: false,
+    borda: "#d97706",
+    bg: "#fffbeb",
+    cor: "#b45309",
+    bordaPill: "#fde68a",
+  };
+}
 
 export function criarGerenciadorCards({
   state,
   modalOS,
   atualizarKpisPainel,
+  getFiltroKpi = () => "",
   esc,
   brl,
   getEl = (id) => document.getElementById(id),
@@ -16,6 +75,7 @@ export function criarGerenciadorCards({
     const st = getEl("fStatus")?.value || "";
     const fin = getEl("fFinal")?.value || "";
     const ap = getEl("fAparelho")?.value || "";
+    const filtroKpi = typeof getFiltroKpi === "function" ? getFiltroKpi() : "";
 
     return state.dados.filter((o) => {
       if (q) {
@@ -26,15 +86,26 @@ export function criarGerenciadorCards({
           o.documento,
           o.servico,
           o.aparelho,
+          o.registro_os,
+          o.numero_venda,
+          o.numero_os,
+          o.numero_os_conserto,
         ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
         if (!alvo.includes(q)) return false;
       }
-      if (st && o.status !== st) return false;
-      if (fin === "1" && !o.servico_finalizado) return false;
-      if (fin === "0" && o.servico_finalizado) return false;
+
+      if (filtroKpi === "Prontas") {
+        if (!isOsProntaRetirada(o)) return false;
+      } else if (filtroKpi === "Pendente" || filtroKpi === "Em andamento") {
+        if (classificarStatusKpi(o) !== filtroKpi) return false;
+      }
+
+      if (st && classificarStatusKpi(o) !== st) return false;
+      if (fin === "1" && !isOsFinalizadaCard(o)) return false;
+      if (fin === "0" && isOsFinalizadaCard(o)) return false;
       if (ap && o.aparelho !== ap) return false;
       return true;
     });
@@ -80,8 +151,7 @@ export function criarGerenciadorCards({
         }`
       : `<span class="no-photo-label">Sem fotos locais</span>`;
 
-    const stCls = o.servico_finalizado ? "finalizado" : "pendente";
-    const stTxt = o.servico_finalizado ? "Finalizado" : o.status || "Pendente";
+    const st = obterEstiloStatusCard(o);
     const resumoTexto =
       o.servico ||
       o.observacao ||
@@ -89,13 +159,23 @@ export function criarGerenciadorCards({
       "Sem resumo de serviço";
 
     return `
-      <article class="os-card ${o.servico_finalizado ? "is-done" : "is-open"}" data-idx="${idx}">
+      <article
+        class="os-card status-${st.slug} ${st.isDone ? "is-done" : "is-open"}"
+        data-idx="${idx}"
+        style="border-left:4px solid ${st.borda}"
+      >
         <div class="card-header">
           <div>
             <div class="client-name">${esc(o.nome || "CONSUMIDOR")}</div>
             <div class="client-phone mono">${esc(o.telefone || "Sem telefone")}${o.placa ? ` · ${esc(o.placa)}` : ""}</div>
           </div>
-          <span class="status-tag ${stCls}">${esc(stTxt)}</span>
+          <span
+            class="status-tag status-${st.slug}"
+            style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:${st.bg};color:${st.cor};border:1px solid ${st.bordaPill};white-space:nowrap"
+          >
+            <span style="width:7px;height:7px;border-radius:50%;background:${st.borda};display:inline-block"></span>
+            ${esc(st.texto)}
+          </span>
         </div>
 
         <div class="card-meta-row">
@@ -146,14 +226,17 @@ export function criarGerenciadorCards({
     if (state.dados.length === 0) {
       if (boxPrimeiro) boxPrimeiro.style.display = "block";
       container.innerHTML = "";
-      atualizarKpisPainel([]);
+      if (typeof atualizarKpisPainel === "function") atualizarKpisPainel([]);
       return;
     }
 
     if (boxPrimeiro) boxPrimeiro.style.display = "none";
 
+    if (typeof atualizarKpisPainel === "function") {
+      atualizarKpisPainel(state.dados);
+    }
+
     const lista = filtrados();
-    atualizarKpisPainel(lista);
 
     if (!lista.length) {
       container.innerHTML = `<div class="empty-box">Nenhuma Ordem de Serviço encontrada no banco local para os filtros aplicados.</div>`;

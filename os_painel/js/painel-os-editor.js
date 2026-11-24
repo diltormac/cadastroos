@@ -65,6 +65,13 @@ export function montarPatchOS(formState = {}) {
     String(formState.status || "").trim() ||
     (finalizado ? "Finalizado" : "Pendente");
 
+  const registroOsLimpo = String(
+    formState.registro_os ?? formState.registroOs ?? "",
+  ).trim();
+  const numeroVendaLimpo = String(
+    formState.numero_venda ?? formState.numeroVenda ?? "",
+  ).trim();
+
   return {
     nome: String(formState.nome || "").trim() || "CONSUMIDOR",
     telefone: String(formState.telefone || "").trim(),
@@ -76,6 +83,8 @@ export function montarPatchOS(formState = {}) {
     cor: String(formState.cor || "").trim(),
     numero_os: String(formState.numero_os || "").trim(),
     numero_os_conserto: String(formState.numero_os_conserto || "").trim(),
+    registro_os: registroOsLimpo || null,
+    numero_venda: numeroVendaLimpo || null,
     status: statusLimpo,
     servico_finalizado: finalizado,
     observacao: String(formState.observacao || "").trim(),

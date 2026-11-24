@@ -95,7 +95,7 @@ export function criarGerenciadorSync({
       fotos_locais: fotosLocais,
       fotos_urls: fotosLocais.map((x) => x.src).filter(Boolean),
       servico_finalizado: Boolean(os.servico_finalizado),
-      status: os.status || (os.servico_finalizado ? "Finalizado" : "Pendente"),
+      status: os.status || (os.servico_finalizado ? "Concluído" : "Pendente"),
     };
   }
 
@@ -127,13 +127,30 @@ export function criarGerenciadorSync({
     }
 
     try {
+      const rem = await osCache.reconciliarRemocoesComSupabase();
+      const upd = await osCache.sincronizarAtualizacoesComSupabase({
+        limite: 500,
+        baixarImagens: true,
+      });
       const res = await osCache.baixarNovosDoSupabase({
         limite: 500,
         baixarImagens: true,
       });
 
-      if (res.ok && res.adicionados > 0) {
-        await carregarDoBancoOffline(`+${res.adicionados} nova(s)`);
+      const houveMudanca =
+        (rem.ok && rem.removidos > 0) ||
+        (upd.ok && upd.atualizados > 0) ||
+        (res.ok && res.adicionados > 0);
+
+      if (houveMudanca) {
+        const detalhe = [
+          res.adicionados > 0 ? `+${res.adicionados} nova(s)` : "",
+          upd.atualizados > 0 ? `${upd.atualizados} atualizada(s)` : "",
+          rem.removidos > 0 ? `-${rem.removidos} removida(s)` : "",
+        ]
+          .filter(Boolean)
+          .join(", ");
+        await carregarDoBancoOffline(detalhe);
       } else if (forcarIndicador) {
         await carregarDoBancoOffline(
           res.ok ? "atualizado" : "falha na consulta",
