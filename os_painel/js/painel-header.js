@@ -16,6 +16,15 @@ export function montarHeaderPainel(alvoSeletor = "#headerSlot") {
             <div class="brand-sub">Painel de OS</div>
           </div>
         </div>
+
+        <button
+          id="btnVoltarCadastroOS"
+          type="button"
+          onclick="window.location.href = '../index.html'"
+          class="esconder-no-electron btn btn-sm"
+        >
+          ← Cadastro de OS
+        </button>
       </div>
 
       <div class="header-right">

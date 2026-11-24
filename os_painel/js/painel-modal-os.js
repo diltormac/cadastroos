@@ -10,6 +10,8 @@ import {
   buscarMenorNumeroLivreReforma,
   buscarMenorNumeroLivreConsertoSolda,
 } from "./painel-catalogo-regras.js";
+import { compartilharTexto } from "./compartilhamento.js";
+import { supabaseClient } from "../../js/supabase.js";
 
 function esc(s) {
   return String(s ?? "").replace(
@@ -32,6 +34,72 @@ function brl(n) {
   });
 }
 
+function formatarDataRelatorio(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function numeroExibicaoRelatorio(os, atualDraft) {
+  const servicosTexto = [
+    ...(atualDraft?.itens_servicos || []).map((i) => i.servico || i.nome || ""),
+    atualDraft?.servico || "",
+    os?.servico || "",
+  ]
+    .join(" ")
+    .toUpperCase();
+
+  if (servicosTexto.includes("CONSERTO") || servicosTexto.includes("SOLDA")) {
+    return (
+      atualDraft?.numero_os_conserto ||
+      os?.numero_os_conserto ||
+      atualDraft?.numero_os ||
+      os?.numero_os ||
+      `#${os?.id ?? os?.uuid_local ?? "—"}`
+    );
+  }
+  return (
+    atualDraft?.numero_os ||
+    os?.numero_os ||
+    `#${os?.id ?? os?.uuid_local ?? "—"}`
+  );
+}
+
+async function converterImagemParaBase64(url) {
+  try {
+    const resposta = await fetch(url);
+    const blob = await resposta.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function baixarBlob(blob, nome) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nome;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 function calcularStatusPorDocumentos(draft) {
   if (draft?.status === "Cancelado") {
     return "Cancelado";
@@ -39,6 +107,282 @@ function calcularStatusPorDocumentos(draft) {
   if (String(draft?.numero_venda || "").trim()) return "Concluído";
   if (String(draft?.registro_os || "").trim()) return "Em andamento";
   return "Pendente";
+}
+
+function montarTextoCompartilhamento(os, atualDraft, totais) {
+  const linhas = [
+    `OS #${os?.id ?? os?.uuid_local ?? "—"} — ${atualDraft?.nome || "CONSUMIDOR"}`,
+    `Status: ${atualDraft?.status || "Pendente"}`,
+  ];
+
+  if (atualDraft?.telefone) linhas.push(`Telefone: ${atualDraft.telefone}`);
+  if (atualDraft?.placa) linhas.push(`Placa: ${atualDraft.placa}`);
+  if (atualDraft?.aparelho)
+    linhas.push(`Veículo/Aparelho: ${atualDraft.aparelho}`);
+  if (atualDraft?.cor) linhas.push(`Cor: ${atualDraft.cor}`);
+  if (atualDraft?.numero_os)
+    linhas.push(`Nº OS Reforma: ${atualDraft.numero_os}`);
+  if (atualDraft?.numero_os_conserto) {
+    linhas.push(`Nº OS Conserto: ${atualDraft.numero_os_conserto}`);
+  }
+  if (atualDraft?.registro_os)
+    linhas.push(`Registro OS: ${atualDraft.registro_os}`);
+  if (atualDraft?.numero_venda)
+    linhas.push(`Nº Venda: ${atualDraft.numero_venda}`);
+
+  if (Array.isArray(totais?.itens) && totais.itens.length > 0) {
+    linhas.push("Itens:");
+    totais.itens.forEach((it) => {
+      const nome = it.servico || it.nome || "ITEM";
+      linhas.push(
+        `- ${nome} (${it.quantidade}x ${brl(it.valor_unitario)}) = ${brl(it.valor)}`,
+      );
+    });
+  }
+
+  linhas.push(`Subtotal: ${brl(totais?.subtotal)}`);
+  if (Number(totais?.desconto || 0) > 0) {
+    linhas.push(`Desconto: ${brl(totais.desconto)}`);
+  }
+  linhas.push(`Total: ${brl(totais?.valorFinal)}`);
+
+  const obs = [atualDraft?.observacao, atualDraft?.observacao_manual]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean)
+    .join(" | ");
+  if (obs) linhas.push(`Obs: ${obs}`);
+
+  return linhas.join("\n");
+}
+
+async function abrirModalRelatorioEstiloCorporativo(os, atualDraft, totais) {
+  if (document.getElementById("modalRelatorioOS")) return;
+
+  const logoBase64 = await converterImagemParaBase64("./assets/logo.png");
+  const numExibicao = numeroExibicaoRelatorio(os, atualDraft);
+  const dataRef = os?.created_at || os?.criado_em;
+
+  let obsLimpa = String(atualDraft?.observacao || os?.observacao || "");
+  obsLimpa = obsLimpa.replace(/\s*\|\s*PLACA:[^|]*/g, "");
+  obsLimpa = obsLimpa.replace(/\s*\|\s*COR:[^|]*/g, "");
+  const obsManual = String(atualDraft?.observacao_manual || "").trim();
+  const obsFinal = [obsLimpa.trim(), obsManual].filter(Boolean).join(" | ");
+
+  const itensLista = Array.isArray(totais?.itens) ? totais.itens : [];
+  const somaItens = itensLista.reduce(
+    (soma, item) => soma + (Number(item.valor) || 0),
+    0,
+  );
+  const valorExibicaoTotal =
+    Number(totais?.valorFinal ?? somaItens) > 0
+      ? Number(totais?.valorFinal ?? somaItens)
+      : somaItens;
+
+  const div = document.createElement("div");
+  div.id = "modalRelatorioOS";
+  div.style.cssText =
+    "position:fixed;inset:0;z-index:90;background:rgba(15,23,42,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:12px;overflow-y:auto";
+
+  const linhasItensHtml = itensLista
+    .map((item, index) => {
+      const qtd = Number(item.quantidade) || 1;
+      const valorTotalItem = Number(item.valor) || 0;
+      const valorUnit =
+        Number(item.valor_unitario) > 0
+          ? Number(item.valor_unitario)
+          : valorTotalItem / qtd;
+
+      return `
+        <tr style="background:${index % 2 === 0 ? "#ffffff" : "rgba(248,250,252,0.7)"};border-top:1px solid #e2e8f0;page-break-inside:avoid">
+          <td style="padding:10px 12px;font-weight:700;color:#1e293b;word-break:break-word">${esc(item.servico || item.nome || "SERVIÇO")}</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:700;color:#1e293b">${esc(qtd)}</td>
+          <td style="padding:10px 12px;text-align:right;font-weight:600;color:#334155;white-space:nowrap">${brl(valorUnit)}</td>
+          <td style="padding:10px 12px;text-align:right;font-weight:800;color:#0f172a;white-space:nowrap">${brl(valorTotalItem)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  div.innerHTML = `
+    <div style="background:#f1f5f9;border-radius:12px;width:100%;max-width:768px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;display:flex;flex-direction:column;max-height:92vh">
+      <div style="flex:1;overflow-y:auto;background:#ffffff">
+        <div id="relatorioOSCaptura" style="background:#ffffff;margin:0 auto;width:100%;max-width:210mm;padding:28px 32px;font-family:'Inter',system-ui,-apple-system,sans-serif;color:#0f172a;box-sizing:border-box">
+          <div style="border-bottom:2px solid #0f172a;padding-bottom:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+            <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
+              <img src="${esc(logoBase64 || "./assets/logo.png")}" alt="Logo" crossorigin="anonymous" style="height:56px;width:auto;object-fit:contain;border-radius:8px;flex-shrink:0" onerror="this.style.display='none'" />
+              <div style="border-left:1px solid #cbd5e1;padding-left:14px">
+                <h1 style="margin:0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#0f172a">Clínica da Roda</h1>
+                <p style="margin:2px 0 0;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;color:#475569">Tratamento perfeito para rodas</p>
+                <p style="margin:4px 0 0;font-size:10px;font-weight:600;color:#475569">CNPJ: 08.297.622.0001/35</p>
+              </div>
+            </div>
+
+            <div style="text-align:right;background:#f8fafc;border:1px solid #cbd5e1;padding:10px 14px;border-radius:8px;flex-shrink:0">
+              <p style="margin:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Ordem de Serviço</p>
+              <p style="margin:2px 0 0;font-size:16px;font-weight:800;color:#0f172a">Nº ${esc(numExibicao)}</p>
+              <p style="margin:2px 0 0;font-size:11px;font-weight:700;color:#475569">${esc(formatarDataRelatorio(dataRef))}</p>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:20px">
+            <div style="background:#f8fafc;padding:12px 14px;border-radius:8px;border:1px solid #cbd5e1">
+              <p style="margin:0 0 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Dados do Cliente</p>
+              <p style="margin:0;font-size:13.5px;font-weight:800;color:#0f172a;word-break:break-word">${esc(atualDraft?.nome || "Não informado")}</p>
+              <p style="margin:6px 0 0;font-size:12px;font-weight:600;color:#334155;word-break:break-all">${esc(atualDraft?.telefone || "Sem contato")}</p>
+            </div>
+
+            <div style="background:#f8fafc;padding:12px 14px;border-radius:8px;border:1px solid #cbd5e1;display:flex;flex-direction:column;justify-content:space-between">
+              <p style="margin:0 0 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Identificação do Veículo</p>
+              <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+                ${
+                  atualDraft?.placa
+                    ? `<div>
+                        <p style="margin:0 0 3px;font-size:9px;font-weight:700;text-transform:uppercase;color:#64748b">Placa</p>
+                        <span style="display:inline-block;background:#0f172a;color:#ffffff;font-size:12px;font-weight:800;padding:2px 7px;border-radius:4px;letter-spacing:0.08em">${esc(atualDraft.placa)}</span>
+                      </div>`
+                    : ""
+                }
+                ${
+                  atualDraft?.cor
+                    ? `<div>
+                        <p style="margin:0 0 3px;font-size:9px;font-weight:700;text-transform:uppercase;color:#64748b">Cor</p>
+                        <p style="margin:0;font-size:12px;font-weight:800;color:#0f172a">${esc(atualDraft.cor)}</p>
+                      </div>`
+                    : ""
+                }
+                ${
+                  !atualDraft?.placa && !atualDraft?.cor
+                    ? `<span style="font-size:12px;color:#64748b">Não informada</span>`
+                    : ""
+                }
+              </div>
+            </div>
+          </div>
+
+          <table style="width:100%;text-align:left;font-size:12.5px;margin-bottom:20px;border-collapse:collapse;table-layout:fixed">
+            <thead>
+              <tr style="background:#0f172a;color:#ffffff">
+                <th style="padding:10px 12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;width:45%;border-top-left-radius:6px">Serviços</th>
+                <th style="padding:10px 8px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;text-align:center;width:15%">Qtd</th>
+                <th style="padding:10px 12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;text-align:right;width:20%">Unitário</th>
+                <th style="padding:10px 12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;text-align:right;width:20%;border-top-right-radius:6px">Total</th>
+              </tr>
+            </thead>
+            <tbody style="border-bottom:1px solid #cbd5e1">
+              ${linhasItensHtml || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#64748b">Nenhum serviço informado</td></tr>'}
+            </tbody>
+          </table>
+
+          <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
+            <div style="background:#0f172a;color:#ffffff;border-radius:8px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;width:100%;max-width:280px;box-shadow:0 4px 10px rgba(15,23,42,0.12)">
+              <span style="font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:#cbd5e1">Valor Total</span>
+              <span style="font-weight:800;font-size:20px;color:#ffffff">${esc(brl(valorExibicaoTotal))}</span>
+            </div>
+          </div>
+
+          ${
+            obsFinal
+              ? `<div style="margin-bottom:22px;page-break-inside:avoid">
+                  <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Observações Técnicas</p>
+                  <div style="font-size:12.5px;color:#1e293b;font-weight:500;background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #cbd5e1;line-height:1.5;word-break:break-word">${esc(obsFinal)}</div>
+                </div>`
+              : ""
+          }
+
+          <div style="margin-top:24px;text-align:center;padding-bottom:8px">
+            <p style="margin:0;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.08em">Clínica da Roda &bull; Cuidando do que te move</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:12px 16px;background:#f1f5f9;border-top:1px solid #cbd5e1;display:flex;gap:10px;justify-content:flex-end;flex-shrink:0">
+        <button type="button" id="btnFecharRelatorioOS" style="padding:9px 18px;background:#e2e8f0;color:#1e293b;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Fechar</button>
+        <button type="button" id="btnGerarPdfRelatorioOS" style="padding:9px 18px;background:#0f172a;color:#ffffff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px">
+          <span id="txtBtnPdfRelatorio">Gerar PDF</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(div);
+
+  const fecharRel = () => div.remove();
+  div.addEventListener("click", (e) => {
+    if (e.target === div) fecharRel();
+  });
+  div
+    .querySelector("#btnFecharRelatorioOS")
+    ?.addEventListener("click", fecharRel);
+
+  div
+    .querySelector("#btnGerarPdfRelatorioOS")
+    ?.addEventListener("click", async (e) => {
+      const botao = e.currentTarget;
+      const textoOriginal = botao.innerHTML;
+      botao.innerHTML = "Gerando PDF...";
+      botao.disabled = true;
+
+      try {
+        const elemento = document.getElementById("relatorioOSCaptura");
+        const nomeArquivo = `OS-${String(numExibicao).replace(/[^\w-]/g, "_")}.pdf`;
+
+        if (typeof window.html2pdf === "function") {
+          const estiloOriginal = elemento.getAttribute("style");
+          elemento.style.width = "210mm";
+          elemento.style.padding = "10mm 15mm";
+
+          const opt = {
+            margin: 0,
+            filename: nomeArquivo,
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+            pagebreak: { mode: ["css", "legacy"] },
+          };
+
+          const pdfBlob = await window
+            .html2pdf()
+            .set(opt)
+            .from(elemento)
+            .outputPdf("blob");
+
+          if (estiloOriginal) {
+            elemento.setAttribute("style", estiloOriginal);
+          }
+
+          const ehCapacitor = window.Capacitor?.isNativePlatform?.() || false;
+          if (ehCapacitor) {
+            const arquivo = new File([pdfBlob], nomeArquivo, {
+              type: "application/pdf",
+            });
+            const objectUrl = URL.createObjectURL(arquivo);
+            await compartilharTexto({
+              titulo: `Relatório OS ${numExibicao}`,
+              texto: `Segue o relatório em PDF da sua OS: ${numExibicao}`,
+              fotoUrl: objectUrl,
+              isPdf: true,
+            });
+            URL.revokeObjectURL(objectUrl);
+          } else {
+            baixarBlob(pdfBlob, nomeArquivo);
+          }
+        } else {
+          const janela = window.open("", "_blank", "width=820,height=700");
+          if (janela) {
+            janela.document.write(
+              `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"/><title>Relatório OS ${esc(numExibicao)}</title></head><body>${elemento.outerHTML}<script>window.print();</script></body></html>`,
+            );
+            janela.document.close();
+          }
+        }
+        fecharRel();
+      } catch (err) {
+        console.error("Erro ao gerar PDF do relatório:", err);
+      } finally {
+        botao.innerHTML = textoOriginal;
+        botao.disabled = false;
+      }
+    });
 }
 
 const inputSoftStyle =
@@ -49,6 +393,7 @@ export function criarModalDetalhesOS({
   conteudoId = "modalConteudo",
   onAbrirFoto,
   onAtualizarOS,
+  onExcluirOS,
   onFechar,
 } = {}) {
   const getOverlay = () => document.getElementById(overlayId);
@@ -327,6 +672,11 @@ export function criarModalDetalhesOS({
       <div class="modal-gallery">${fotos || '<span style="color:#7a8494;font-size:13px">Nenhuma foto salva localmente nesta OS.</span>'}</div>
 
       <div class="modal-actions">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button id="btnCompartilharOS" class="btn" type="button">Compartilhar</button>
+          <button id="btnRelatorioOS" class="btn" type="button">Relatório</button>
+          <button id="btnExcluirOS" class="btn" type="button" style="color:#b91c1c;border-color:rgba(185,28,28,0.35)" ${podeEditar ? "" : "disabled"}>Excluir OS</button>
+        </div>
         ${
           podeEditar
             ? `<button id="btnSalvarAlteracoes" class="btn btn-primary" type="button">Salvar alterações</button>`
@@ -339,6 +689,56 @@ export function criarModalDetalhesOS({
     overlay.classList.add("aberto");
 
     conteudo.querySelector("#btnFechar")?.addEventListener("click", fechar);
+
+    conteudo
+      .querySelector("#btnCompartilharOS")
+      ?.addEventListener("click", async () => {
+        sincronizarCamposDoDom(conteudo);
+        const tot = calcularTotaisOS(draft.itens_servicos, draft.desconto);
+        const texto = montarTextoCompartilhamento(osAtual, draft, tot);
+        const fotoUrl = fotosValidas[0]?.src || osAtual.fotos_urls?.[0] || "";
+        await compartilharTexto({
+          titulo: `OS #${osAtual.id ?? osAtual.uuid_local ?? ""}`,
+          texto,
+          fotoUrl,
+        });
+      });
+
+    conteudo
+      .querySelector("#btnRelatorioOS")
+      ?.addEventListener("click", async () => {
+        sincronizarCamposDoDom(conteudo);
+        const tot = calcularTotaisOS(draft.itens_servicos, draft.desconto);
+        await abrirModalRelatorioEstiloCorporativo(osAtual, draft, tot);
+      });
+
+    conteudo
+      .querySelector("#btnExcluirOS")
+      ?.addEventListener("click", async () => {
+        if (!podeEditar) return;
+        const nomeCliente = draft.nome || osAtual.nome || "cliente sem nome";
+        const ok = window.confirm(
+          `Excluir a OS #${osAtual.id} de ${nomeCliente}?`,
+        );
+        if (!ok) return;
+
+        definirBotoesDesabilitados(true);
+        try {
+          if (typeof onExcluirOS === "function") {
+            await onExcluirOS(osAtual);
+          } else if (supabaseClient && osAtual.id != null) {
+            const { error } = await supabaseClient
+              .from("ordens_servico")
+              .delete()
+              .eq("id", osAtual.id);
+            if (error) throw error;
+          }
+          fechar();
+        } catch (err) {
+          console.error("Falha ao excluir OS:", err);
+          definirBotoesDesabilitados(false);
+        }
+      });
 
     conteudo.querySelectorAll(".foto-thumb-btn").forEach((btn) => {
       btn.addEventListener("click", () => {

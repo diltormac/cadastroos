@@ -71,8 +71,8 @@ export async function carregarCatalogoServicos() {
     try {
       const { data, error } = await supabaseClient
         .from("catalogo_servicos")
-        .select("nome, valor")
-        .order("nome", { ascending: true });
+        .select("id, nome, valor")
+        .order("id", { ascending: true });
 
       if (!error && Array.isArray(data)) {
         catalogoCache = data.map((s) => ({

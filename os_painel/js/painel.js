@@ -21,12 +21,6 @@ let gerenciadorCards = null;
 montarHeaderPainel("#headerSlot");
 montarKpisPainel("#kpisSlot", (tipoFiltro) => {
   filtroKpiAtivo = tipoFiltro || "";
-  if (el("fStatus")) {
-    el("fStatus").value =
-      tipoFiltro === "Pendente" || tipoFiltro === "Em andamento"
-        ? tipoFiltro
-        : "";
-  }
   gerenciadorCards?.render();
 });
 
@@ -106,30 +100,23 @@ const gerenciadorBackup = criarGerenciadorBackup({
 
 /* ---------------- Eventos Globais ---------------- */
 
-["fBusca", "fStatus", "fFinal", "fAparelho"].forEach((id) =>
-  el(id).addEventListener("input", () => {
-    if (id === "fStatus") {
-      const valStatus = el("fStatus")?.value || "";
-      if (
-        filtroKpiAtivo &&
-        filtroKpiAtivo !== "Prontas" &&
-        valStatus !== filtroKpiAtivo
-      ) {
-        filtroKpiAtivo = "";
-        definirFiltroKpiAtivo("");
-      }
-    }
+["fBusca", "fServico", "fDataInicial", "fDataFinal"].forEach((id) =>
+  el(id)?.addEventListener("input", () => {
     gerenciadorCards.render();
   }),
 );
 
-el("btnLimparFiltros").addEventListener("click", () => {
+el("fServico")?.addEventListener("change", () => gerenciadorCards.render());
+el("fDataInicial")?.addEventListener("change", () => gerenciadorCards.render());
+el("fDataFinal")?.addEventListener("change", () => gerenciadorCards.render());
+
+el("btnLimparFiltros")?.addEventListener("click", () => {
   filtroKpiAtivo = "";
   definirFiltroKpiAtivo("");
-  el("fBusca").value = "";
-  el("fStatus").value = "";
-  el("fFinal").value = "";
-  el("fAparelho").value = "";
+  if (el("fBusca")) el("fBusca").value = "";
+  if (el("fServico")) el("fServico").value = "";
+  if (el("fDataInicial")) el("fDataInicial").value = "";
+  if (el("fDataFinal")) el("fDataFinal").value = "";
   gerenciadorCards.render();
 });
 
@@ -137,7 +124,7 @@ el("btnGaleriaOffline")?.addEventListener("click", () => {
   galeriaOffline.abrirGaleriaOffline(0);
 });
 
-el("btnAtualizar").addEventListener("click", () =>
+el("btnAtualizar")?.addEventListener("click", () =>
   gerenciadorSync.sincronizarNovos(true),
 );
 el("btnInicialSupabase")?.addEventListener("click", () =>
@@ -189,8 +176,6 @@ window.addEventListener("offline", async () => {
   await gerenciadorSync.carregarDoBancoOffline();
 });
 
-// 1. Exibe imediatamente o que já está no OsPainelDB
-// 2. Baixa apenas OS que faltam e abre o Realtime
 gerenciadorSync.carregarDoBancoOffline().then(async () => {
   await gerenciadorSync.sincronizarNovos(false);
   gerenciadorSync.iniciarRealtime();

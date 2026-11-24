@@ -25,19 +25,21 @@
             type="search"
             placeholder="Buscar por cliente, telefone, placa, documento, serviço ou aparelho…"
           />
-          <select id="fStatus">
-            <option value="">Status: Todos</option>
-            <option value="Pendente">Pendente</option>
-            <option value="Finalizado">Finalizado</option>
+          <select id="fServico" aria-label="Tipo de serviço">
+            <option value="">Todos os serviços</option>
           </select>
-          <select id="fFinal">
-            <option value="">Finalização: Todas</option>
-            <option value="0">Em aberto</option>
-            <option value="1">Finalizadas</option>
-          </select>
-          <select id="fAparelho">
-            <option value="">Todos os aparelhos</option>
-          </select>
+          <input
+            id="fDataInicial"
+            type="date"
+            aria-label="Data inicial"
+            title="Data inicial"
+          />
+          <input
+            id="fDataFinal"
+            type="date"
+            aria-label="Data final"
+            title="Data final"
+          />
           <button id="btnLimparFiltros" class="btn" type="button">
             Limpar
           </button>

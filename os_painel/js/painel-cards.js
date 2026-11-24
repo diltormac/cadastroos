@@ -3,11 +3,7 @@ import { painelDb } from "./painel-db.js";
 import { osCache } from "./os-cache.js";
 import { uiAlerta } from "./ui-alerta.js";
 import { classificarStatusKpi, isOsProntaRetirada } from "./painel-kpis.js";
-
-function isOsFinalizadaCard(o) {
-  if (!o || o.status === "Cancelado") return false;
-  return String(o?.numero_venda || "").trim().length > 0;
-}
+import { carregarCatalogoServicos } from "./painel-catalogo-regras.js";
 
 function obterEstiloStatusCard(o) {
   const statusRaw = String(o?.status || "").trim();
@@ -61,6 +57,43 @@ function obterEstiloStatusCard(o) {
   };
 }
 
+function normalizarTexto(v) {
+  return String(v ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+}
+
+function extrairDataLocalISO(o) {
+  const raw = o?.created_at || o?.criado_em || "";
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) {
+    const ano = d.getFullYear();
+    const mes = String(d.getMonth() + 1).padStart(2, "0");
+    const dia = String(d.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
+  }
+  const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : "";
+}
+
+function osPossuiServico(o, servicoFiltro) {
+  const alvo = normalizarTexto(servicoFiltro);
+  if (!alvo) return true;
+
+  const listaTextos = [o?.servico || ""];
+  if (Array.isArray(o?.itens_servicos)) {
+    o.itens_servicos.forEach((it) => {
+      if (it?.servico) listaTextos.push(it.servico);
+      if (it?.nome) listaTextos.push(it.nome);
+    });
+  }
+
+  return listaTextos.some((txt) => normalizarTexto(txt).includes(alvo));
+}
+
 export function criarGerenciadorCards({
   state,
   modalOS,
@@ -70,11 +103,51 @@ export function criarGerenciadorCards({
   brl,
   getEl = (id) => document.getElementById(id),
 } = {}) {
+  let catalogoCarregado = false;
+
+  function preencherSelectServico(selSrv, catalogo) {
+    if (!selSrv || !Array.isArray(catalogo)) return;
+
+    const nomes = [
+      ...new Set(
+        catalogo
+          .map((item) =>
+            typeof item === "string" ? item : item?.nome || item?.servico || "",
+          )
+          .map((n) => String(n).trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ].sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+    const atual = selSrv.value;
+    selSrv.innerHTML =
+      '<option value="">Todos os serviços</option>' +
+      nomes.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+
+    if (nomes.includes(atual)) {
+      selSrv.value = atual;
+    }
+  }
+
+  function sincronizarCatalogoFiltro(selSrv) {
+    if (!selSrv || typeof carregarCatalogoServicos !== "function") return;
+    carregarCatalogoServicos()
+      .then((catalogo) => {
+        if (Array.isArray(catalogo) && catalogo.length > 0) {
+          preencherSelectServico(selSrv, catalogo);
+        }
+      })
+      .catch((err) => {
+        console.warn("Não foi possível carregar catálogo de serviços:", err);
+      });
+  }
+
   function filtrados() {
     const q = (getEl("fBusca")?.value || "").trim().toLowerCase();
     const st = getEl("fStatus")?.value || "";
-    const fin = getEl("fFinal")?.value || "";
-    const ap = getEl("fAparelho")?.value || "";
+    const srv = getEl("fServico")?.value || "";
+    const dataIni = getEl("fDataInicial")?.value || "";
+    const dataFim = getEl("fDataFinal")?.value || "";
     const filtroKpi = typeof getFiltroKpi === "function" ? getFiltroKpi() : "";
 
     return state.dados.filter((o) => {
@@ -104,9 +177,14 @@ export function criarGerenciadorCards({
       }
 
       if (st && classificarStatusKpi(o) !== st) return false;
-      if (fin === "1" && !isOsFinalizadaCard(o)) return false;
-      if (fin === "0" && isOsFinalizadaCard(o)) return false;
-      if (ap && o.aparelho !== ap) return false;
+      if (srv && !osPossuiServico(o, srv)) return false;
+
+      if (dataIni || dataFim) {
+        const dataOs = extrairDataLocalISO(o);
+        if (dataIni && (!dataOs || dataOs < dataIni)) return false;
+        if (dataFim && (!dataOs || dataOs > dataFim)) return false;
+      }
+
       return true;
     });
   }
@@ -204,19 +282,18 @@ export function criarGerenciadorCards({
   }
 
   function render() {
-    const aparelhos = [
-      ...new Set(state.dados.map((o) => o.aparelho).filter(Boolean)),
-    ].sort((a, b) => a.localeCompare(b, "pt-BR"));
-
-    const selAp = getEl("fAparelho");
-    if (selAp) {
-      const atual = selAp.value;
-      selAp.innerHTML =
-        '<option value="">Todos os aparelhos</option>' +
-        aparelhos
-          .map((a) => `<option value="${esc(a)}">${esc(a)}</option>`)
-          .join("");
-      if (aparelhos.includes(atual)) selAp.value = atual;
+    const selSrv = getEl("fServico");
+    if (selSrv) {
+      if (!selSrv.dataset.focusBound) {
+        selSrv.dataset.focusBound = "1";
+        selSrv.addEventListener("focus", () =>
+          sincronizarCatalogoFiltro(selSrv),
+        );
+      }
+      if (!catalogoCarregado) {
+        catalogoCarregado = true;
+        sincronizarCatalogoFiltro(selSrv);
+      }
     }
 
     const boxPrimeiro = getEl("boxPrimeiroAcesso");
