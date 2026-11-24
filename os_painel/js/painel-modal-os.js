@@ -179,18 +179,18 @@ export function criarModalDetalhesOS({
         };
 
         return `
-          <tr data-item-idx="${idx}">
-            <td>
+          <tr data-item-idx="${idx}" class="item-os-row">
+            <td class="col-servico" data-label="Serviço / Produto">
               <input type="text" list="datalistCatalogoServicos" class="item-servico" style="${inputSoftStyle}" value="${esc(item.servico ?? item.nome ?? "")}" placeholder="Serviço / produto" ${podeEditar ? "" : "disabled"} />
             </td>
-            <td>
+            <td class="col-qtd" data-label="Qtd">
               <input type="number" min="1" step="1" class="mono item-qtd" style="${inputSoftStyle};padding:7px 6px;text-align:center" value="${esc(calc.quantidade)}" ${podeEditar ? "" : "disabled"} />
             </td>
-            <td>
+            <td class="col-unit" data-label="Unit.">
               <input type="number" min="0" step="0.01" class="mono item-unit" style="${inputSoftStyle};padding:7px 8px;text-align:right" value="${esc(calc.valor_unitario)}" ${podeEditar ? "" : "disabled"} />
             </td>
-            <td class="mono item-total-cell" style="white-space:nowrap">${brl(calc.valor)}</td>
-            <td style="text-align:center;padding-left:0;padding-right:4px">
+            <td class="col-valor mono item-total-cell" data-label="Valor" style="white-space:nowrap">${brl(calc.valor)}</td>
+            <td class="col-acao" style="text-align:center">
               <button type="button" class="btn btn-remover-item" data-del-idx="${idx}" title="Excluir item" style="padding:4px 8px;min-width:0" ${podeEditar ? "" : "disabled"}>×</button>
             </td>
           </tr>
@@ -297,8 +297,8 @@ export function criarModalDetalhesOS({
         <button id="btnAdicionarItem" class="btn" type="button" ${podeEditar ? "" : "disabled"}>+ Adicionar item</button>
       </div>
 
-      <div class="items-table-wrap" style="overflow-x:hidden">
-        <table class="items-table" style="table-layout:fixed;width:100%">
+      <div class="items-table-wrap">
+        <table class="items-table itens-os-tabela">
           <thead>
             <tr>
               <th>Serviço / Produto</th>
