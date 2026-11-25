@@ -5,6 +5,7 @@ import {
   atualizarKpisPainel,
   definirFiltroKpiAtivo,
 } from "./painel-kpis.js";
+import { montarSidebarPainel, abrirSidebar, fecharSidebar } from "./sidebar.js";
 import { criarModalDetalhesOS } from "./painel-modal-os.js";
 import { criarLightboxPainel } from "./painel-lightbox.js";
 import { criarGaleriaOffline } from "./painel-galeria-offline.js";
@@ -19,10 +20,20 @@ let galeriaOffline = null;
 let gerenciadorCards = null;
 
 montarHeaderPainel("#headerSlot");
+if (el("headerSlot")) {
+  el("headerSlot").style.display = "none";
+}
+
 montarKpisPainel("#kpisSlot", (tipoFiltro) => {
   filtroKpiAtivo = tipoFiltro || "";
   gerenciadorCards?.render();
 });
+if (el("kpisSlot")) {
+  el("kpisSlot").style.display = "none";
+}
+
+const sidebarPainel = montarSidebarPainel("#sidebarSlot");
+window.abrirSidebarPainel = abrirSidebar;
 
 const state = {
   dados: [],
@@ -33,8 +44,11 @@ const state = {
 };
 
 function setStatusIndicator(texto, isOffline) {
-  el("statusTexto").textContent = texto;
-  el("statusFonte").classList.toggle("offline", isOffline);
+  const statusEl = el("statusTexto");
+  const fonteEl = el("statusFonte");
+  if (statusEl) statusEl.textContent = texto;
+  if (fonteEl) fonteEl.classList.toggle("offline", isOffline);
+  sidebarPainel?.sincronizar();
 }
 
 function esc(s) {
@@ -87,6 +101,7 @@ const gerenciadorSync = criarGerenciadorSync({
   onDadosAtualizados: () => {
     gerenciadorBackup.atualizarInfoBackup();
     gerenciadorCards.render();
+    sidebarPainel?.sincronizar();
   },
   getBtnAtualizar: () => el("btnAtualizar"),
 });
@@ -124,9 +139,28 @@ el("btnGaleriaOffline")?.addEventListener("click", () => {
   galeriaOffline.abrirGaleriaOffline(0);
 });
 
-el("btnAtualizar")?.addEventListener("click", () =>
-  gerenciadorSync.sincronizarNovos(true),
-);
+el("btnAtualizar")?.addEventListener("click", async () => {
+  await gerenciadorSync.sincronizarNovos(true);
+  sidebarPainel?.sincronizar();
+
+  const textoStatus = (el("statusTexto")?.textContent || "").trim();
+  const offline = Boolean(el("statusFonte")?.classList.contains("offline"));
+
+  if (offline) {
+    await uiAlerta(
+      "Sincronização offline",
+      textoStatus || "Sem conexão no momento. Exibindo dados locais.",
+      "aviso",
+    );
+  } else {
+    await uiAlerta(
+      "Painel atualizado",
+      textoStatus || "Ordens de serviço sincronizadas com sucesso.",
+      "sucesso",
+    );
+  }
+});
+
 el("btnInicialSupabase")?.addEventListener("click", () =>
   gerenciadorSync.sincronizarNovos(true),
 );
@@ -163,6 +197,16 @@ document.addEventListener("keydown", (e) => {
 
   if (e.key === "Escape" && modalOS.estaAberto()) {
     modalOS.fechar();
+  }
+
+  const sidebarEl = document.getElementById("sidebar");
+  if (
+    e.key === "Escape" &&
+    sidebarEl &&
+    (sidebarEl.style.transform === "translateX(0)" ||
+      sidebarEl.style.transform === "translateX(0px)")
+  ) {
+    fecharSidebar();
   }
 });
 

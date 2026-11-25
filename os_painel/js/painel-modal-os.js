@@ -10,8 +10,15 @@ import {
   buscarMenorNumeroLivreReforma,
   buscarMenorNumeroLivreConsertoSolda,
 } from "./painel-catalogo-regras.js";
+import {
+  renderBotaoCopiar,
+  renderBotoesTelefoneExtras,
+  sincronizarServicosNaObservacao,
+  bindCamposExtrasModal,
+} from "./painel-modal-campos-extras.js";
 import { compartilharTexto } from "./compartilhamento.js";
 import { supabaseClient } from "../../js/supabase.js";
+import { uiAlerta, uiConfirmar } from "./ui-alerta.js";
 
 function esc(s) {
   return String(s ?? "").replace(
@@ -388,6 +395,17 @@ async function abrirModalRelatorioEstiloCorporativo(os, atualDraft, totais) {
 const inputSoftStyle =
   "width:100%;box-sizing:border-box;background:#fff;color:#1a1f26;border:1px solid #d0d5db;border-radius:6px;padding:7px 10px;font-size:13px;outline:none";
 
+const btnAcaoRodapeStyle =
+  "display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;line-height:1;white-space:nowrap;cursor:pointer;box-sizing:border-box";
+
+const btnCompartilharColoridoStyle = `${btnAcaoRodapeStyle};background:#2563eb;color:#ffffff;border:1px solid #2563eb`;
+
+const btnRelatorioColoridoStyle = `${btnAcaoRodapeStyle};background:#4f46e5;color:#ffffff;border:1px solid #4f46e5`;
+
+const btnExcluirColoridoStyle = `${btnAcaoRodapeStyle};background:#dc2626;color:#ffffff;border:1px solid #dc2626`;
+
+const btnSalvarColoridoStyle = `${btnAcaoRodapeStyle};background:#059669;color:#ffffff;border:1px solid #059669`;
+
 export function criarModalDetalhesOS({
   overlayId = "modalOverlay",
   conteudoId = "modalConteudo",
@@ -426,6 +444,12 @@ export function criarModalDetalhesOS({
     const conteudo = getConteudo();
     if (!conteudo) return;
     conteudo.querySelectorAll("button, input, select").forEach((el) => {
+      if (
+        el.classList.contains("btn-copiar-campo") ||
+        el.id === "btnWhatsAppTelefone"
+      ) {
+        return;
+      }
       el.disabled = Boolean(desabilitar);
     });
   }
@@ -447,8 +471,8 @@ export function criarModalDetalhesOS({
     draft.numero_venda = getVal("editNumeroVenda").trim().toUpperCase();
     draft.status = calcularStatusPorDocumentos(draft);
     draft.servico_finalizado = draft.status === "Concluído";
-    draft.observacao = getVal("editObservacao");
-    draft.observacao_manual = getVal("editObservacaoManual");
+    draft.observacao = getVal("editObservacao").toUpperCase();
+    draft.observacao_manual = "";
     draft.desconto = Number(getVal("editDesconto") || 0);
 
     const linhas = conteudo.querySelectorAll("tr[data-item-idx]");
@@ -526,7 +550,7 @@ export function criarModalDetalhesOS({
         return `
           <tr data-item-idx="${idx}" class="item-os-row">
             <td class="col-servico" data-label="Serviço / Produto">
-              <input type="text" list="datalistCatalogoServicos" class="item-servico" style="${inputSoftStyle}" value="${esc(item.servico ?? item.nome ?? "")}" placeholder="Serviço / produto" ${podeEditar ? "" : "disabled"} />
+              <input type="text" list="datalistCatalogoServicos" class="item-servico" style="${inputSoftStyle};text-transform:uppercase" value="${esc(item.servico ?? item.nome ?? "")}" placeholder="Serviço / produto" ${podeEditar ? "" : "disabled"} />
             </td>
             <td class="col-qtd" data-label="Qtd">
               <input type="number" min="1" step="1" class="mono item-qtd" style="${inputSoftStyle};padding:7px 6px;text-align:center" value="${esc(calc.quantidade)}" ${podeEditar ? "" : "disabled"} />
@@ -569,23 +593,35 @@ export function criarModalDetalhesOS({
       <div class="section-heading" style="margin-top:16px">Dados do Cliente e Veículo</div>
       <div class="props-grid" style="padding:14px;margin-top:8px">
         <div class="prop-item">
-          <label for="editNome">Cliente</label>
-          <input id="editNome" type="text" style="${inputSoftStyle}" value="${esc(draft.nome)}" ${podeEditar ? "" : "disabled"} />
+          <label for="editNome" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Cliente</span>
+            ${renderBotaoCopiar("editNome")}
+          </label>
+          <input id="editNome" type="text" style="${inputSoftStyle};text-transform:uppercase" value="${esc(draft.nome)}" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item">
-          <label for="editTelefone">Telefone</label>
+          <label for="editTelefone" style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+            <span>Telefone</span>
+            ${renderBotoesTelefoneExtras("editTelefone")}
+          </label>
           <input id="editTelefone" type="tel" class="mono" style="${inputSoftStyle}" value="${esc(draft.telefone)}" placeholder="+55 (00) 00000-0000" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item">
-          <label for="editDocumento">Documento</label>
+          <label for="editDocumento" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Documento</span>
+            ${renderBotaoCopiar("editDocumento")}
+          </label>
           <input id="editDocumento" type="text" class="mono" maxlength="14" style="${inputSoftStyle}" value="${esc(draft.documento)}" placeholder="000.000.000-00" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item">
-          <label for="editPlaca" style="display:flex;justify-content:space-between;align-items:center">
+          <label for="editPlaca" style="display:flex;justify-content:space-between;align-items:center;gap:6px">
             <span>Placa</span>
-            <button type="button" id="btnModoPlaca" class="mono" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid #d0d5db;background:#fff;color:#1f5fbf;cursor:pointer" ${podeEditar ? "" : "disabled"}>MERCOSUL</button>
+            <span style="display:inline-flex;gap:4px">
+              ${renderBotaoCopiar("editPlaca")}
+              <button type="button" id="btnModoPlaca" class="mono" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid #d0d5db;background:#fff;color:#1f5fbf;cursor:pointer" ${podeEditar ? "" : "disabled"}>MERCOSUL</button>
+            </span>
           </label>
-          <input id="editPlaca" type="text" class="mono" maxlength="7" style="${inputSoftStyle}" value="${esc(draft.placa)}" placeholder="ABC1D23" ${podeEditar ? "" : "disabled"} />
+          <input id="editPlaca" type="text" class="mono" maxlength="7" style="${inputSoftStyle};text-transform:uppercase" value="${esc(draft.placa)}" placeholder="ABC1D23" ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item">
           <label for="editAparelho">Veículo / Aparelho</label>
@@ -596,12 +632,11 @@ export function criarModalDetalhesOS({
           <input id="editCor" type="text" style="${inputSoftStyle}" value="${esc(draft.cor)}" placeholder="PRATA, PRETO..." ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item full">
-          <label for="editObservacao">Observação</label>
-          <input id="editObservacao" type="text" style="${inputSoftStyle}" value="${esc(draft.observacao)}" ${podeEditar ? "" : "disabled"} />
-        </div>
-        <div class="prop-item full">
-          <label for="editObservacaoManual">Observação Manual</label>
-          <input id="editObservacaoManual" type="text" style="${inputSoftStyle}" value="${esc(draft.observacao_manual)}" ${podeEditar ? "" : "disabled"} />
+          <label for="editObservacao" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Observação</span>
+            ${renderBotaoCopiar("editObservacao")}
+          </label>
+          <input id="editObservacao" type="text" style="${inputSoftStyle};text-transform:uppercase" value="${esc(draft.observacao)}" ${podeEditar ? "" : "disabled"} />
         </div>
       </div>
 
@@ -671,16 +706,16 @@ export function criarModalDetalhesOS({
       <div class="section-heading">Galeria de Fotos (Local)</div>
       <div class="modal-gallery">${fotos || '<span style="color:#7a8494;font-size:13px">Nenhuma foto salva localmente nesta OS.</span>'}</div>
 
-      <div class="modal-actions">
+      <div class="modal-actions" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button id="btnCompartilharOS" class="btn" type="button">Compartilhar</button>
-          <button id="btnRelatorioOS" class="btn" type="button">Relatório</button>
-          <button id="btnExcluirOS" class="btn" type="button" style="color:#b91c1c;border-color:rgba(185,28,28,0.35)" ${podeEditar ? "" : "disabled"}>Excluir OS</button>
+          <button id="btnCompartilharOS" class="btn" type="button" style="${btnCompartilharColoridoStyle}">Compartilhar</button>
+          <button id="btnRelatorioOS" class="btn" type="button" style="${btnRelatorioColoridoStyle}">Relatório</button>
+          <button id="btnExcluirOS" class="btn" type="button" style="${btnExcluirColoridoStyle}" ${podeEditar ? "" : "disabled"}>Excluir OS</button>
         </div>
         ${
           podeEditar
-            ? `<button id="btnSalvarAlteracoes" class="btn btn-primary" type="button">Salvar alterações</button>`
-            : `<button class="btn" type="button" disabled>Salvar alterações</button>
+            ? `<button id="btnSalvarAlteracoes" class="btn btn-primary" type="button" style="${btnSalvarColoridoStyle}">Salvar alterações</button>`
+            : `<button class="btn" type="button" style="${btnSalvarColoridoStyle};opacity:0.5;cursor:not-allowed" disabled>Salvar alterações</button>
                <div class="offline-banner">Modo offline: consulta e fotos locais ativas; alterações bloqueadas sem internet.</div>`
         }
       </div>
@@ -690,10 +725,25 @@ export function criarModalDetalhesOS({
 
     conteudo.querySelector("#btnFechar")?.addEventListener("click", fechar);
 
+    bindCamposExtrasModal(conteudo, {
+      getDraft: () => draft,
+      getOsAtual: () => osAtual,
+      calcularTotaisOS,
+      montarTextoCompartilhamento,
+      sincronizarCamposDoDom,
+      onTelefoneInvalido: () =>
+        uiAlerta(
+          "Telefone inválido",
+          "Informe um número de telefone válido para abrir o WhatsApp.",
+          "aviso",
+        ),
+    });
+
     conteudo
       .querySelector("#btnCompartilharOS")
       ?.addEventListener("click", async () => {
         sincronizarCamposDoDom(conteudo);
+        sincronizarServicosNaObservacao(conteudo, draft);
         const tot = calcularTotaisOS(draft.itens_servicos, draft.desconto);
         const texto = montarTextoCompartilhamento(osAtual, draft, tot);
         const fotoUrl = fotosValidas[0]?.src || osAtual.fotos_urls?.[0] || "";
@@ -708,6 +758,7 @@ export function criarModalDetalhesOS({
       .querySelector("#btnRelatorioOS")
       ?.addEventListener("click", async () => {
         sincronizarCamposDoDom(conteudo);
+        sincronizarServicosNaObservacao(conteudo, draft);
         const tot = calcularTotaisOS(draft.itens_servicos, draft.desconto);
         await abrirModalRelatorioEstiloCorporativo(osAtual, draft, tot);
       });
@@ -717,8 +768,11 @@ export function criarModalDetalhesOS({
       ?.addEventListener("click", async () => {
         if (!podeEditar) return;
         const nomeCliente = draft.nome || osAtual.nome || "cliente sem nome";
-        const ok = window.confirm(
-          `Excluir a OS #${osAtual.id} de ${nomeCliente}?`,
+        const ok = await uiConfirmar(
+          "Excluir Ordem de Serviço",
+          `Deseja realmente excluir a OS #${osAtual.id} de ${nomeCliente}? Essa ação não pode ser desfeita.`,
+          "Excluir OS",
+          "erro",
         );
         if (!ok) return;
 
@@ -734,9 +788,19 @@ export function criarModalDetalhesOS({
             if (error) throw error;
           }
           fechar();
+          await uiAlerta(
+            "OS excluída",
+            `A OS #${osAtual.id} foi excluída com sucesso.`,
+            "sucesso",
+          );
         } catch (err) {
           console.error("Falha ao excluir OS:", err);
           definirBotoesDesabilitados(false);
+          await uiAlerta(
+            "Erro ao excluir OS",
+            err.message || "Não foi possível excluir a OS.",
+            "erro",
+          );
         }
       });
 
@@ -851,6 +915,7 @@ export function criarModalDetalhesOS({
         }
 
         sincronizarCamposDoDom(conteudo);
+        sincronizarServicosNaObservacao(conteudo, draft);
         atualizarResumoNaTela(conteudo);
       });
     });
@@ -871,13 +936,27 @@ export function criarModalDetalhesOS({
       });
 
     conteudo.querySelectorAll(".btn-remover-item").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         sincronizarCamposDoDom(conteudo);
         const delIdx = Number(btn.dataset.delIdx);
-        if (!Number.isNaN(delIdx)) {
-          draft.itens_servicos.splice(delIdx, 1);
-          render();
+        if (Number.isNaN(delIdx)) return;
+
+        const itemAlvo = draft.itens_servicos[delIdx];
+        const nomeItem = (itemAlvo?.servico || itemAlvo?.nome || "").trim();
+
+        if (nomeItem) {
+          const ok = await uiConfirmar(
+            "Remover serviço",
+            `Deseja remover "${nomeItem}" desta OS?`,
+            "Remover",
+            "aviso",
+          );
+          if (!ok) return;
         }
+
+        draft.itens_servicos.splice(delIdx, 1);
+        render();
+        sincronizarServicosNaObservacao(getConteudo(), draft);
       });
     });
 
@@ -894,6 +973,7 @@ export function criarModalDetalhesOS({
       .querySelector("#btnSalvarAlteracoes")
       ?.addEventListener("click", () => {
         sincronizarCamposDoDom(conteudo);
+        sincronizarServicosNaObservacao(conteudo, draft);
         const patch = montarPatchOS(draft);
         onAtualizarOS(osAtual, patch);
       });
@@ -902,6 +982,18 @@ export function criarModalDetalhesOS({
   async function abrir(o) {
     if (!o) return;
     osAtual = o;
+
+    const obsInicial = [
+      ...new Set(
+        [o.observacao, o.observacao_manual]
+          .map((v) =>
+            String(v || "")
+              .trim()
+              .toUpperCase(),
+          )
+          .filter(Boolean),
+      ),
+    ].join(" | ");
 
     const baseDraft = {
       nome: o.nome || "",
@@ -915,8 +1007,8 @@ export function criarModalDetalhesOS({
       registro_os: o.registro_os || "",
       numero_venda: o.numero_venda || "",
       status: o.status === "Cancelado" ? "Cancelado" : "",
-      observacao: o.observacao || "",
-      observacao_manual: o.observacao_manual || "",
+      observacao: obsInicial,
+      observacao_manual: "",
       servico: o.servico || "",
       desconto: Number(o.desconto || 0),
       itens_servicos: Array.isArray(o.itens_servicos)

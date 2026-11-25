@@ -3,7 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
     <title>Painel de Ordens de Serviço · Clínica da Roda</title>
+
+    <script>
+      (function marcarWindows() {
+        const ua = navigator.userAgent || "";
+        const platform =
+          navigator.userAgentData?.platform || navigator.platform || "";
+        if (/windows/i.test(ua) || /win/i.test(platform)) {
+          document.documentElement.classList.add("os-windows");
+        }
+      })();
+    </script>
+
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icone.png" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="./assets/apple-touch-icon.png"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -11,10 +38,16 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./css/painel.css" />
+    <style>
+      html.os-windows [data-ocultar-windows="true"] {
+        display: none !important;
+      }
+    </style>
   </head>
   <body>
     <div class="page-wrap">
-      <div id="headerSlot"></div>
+      <div id="headerSlot" style="display: none"></div>
+      <div id="sidebarSlot"></div>
 
       <main>
         <div id="kpisSlot"></div>
@@ -130,5 +163,34 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script type="module" src="./js/painel.js"></script>
+    <script type="module">
+      function marcarBotoesCadastroOS() {
+        document.querySelectorAll("a, button").forEach((el) => {
+          const texto = (el.textContent || "").replace(/\s+/g, " ").trim();
+          if (texto.includes("Cadastro de OS")) {
+            el.setAttribute("data-ocultar-windows", "true");
+          }
+        });
+      }
+
+      marcarBotoesCadastroOS();
+      new MutationObserver(marcarBotoesCadastroOS).observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("./service-worker.js")
+            .then((reg) => {
+              reg.update();
+            })
+            .catch((error) => {
+              console.error("Falha ao registrar PWA:", error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>

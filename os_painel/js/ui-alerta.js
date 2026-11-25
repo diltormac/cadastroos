@@ -143,12 +143,6 @@ function aplicarEstiloTipo(iconeEl, tipo) {
   iconeEl.style.border = `1px solid ${cfg.borda}`;
 }
 
-/**
- * Exibe um alerta elegante substituindo window.alert()
- * @param {string} titulo
- * @param {string} mensagem
- * @param {"sucesso"|"erro"|"aviso"} [tipo="sucesso"]
- */
 export function uiAlerta(titulo, mensagem, tipo = "sucesso") {
   return new Promise((resolve) => {
     const overlay = garantirModal();
@@ -167,6 +161,8 @@ export function uiAlerta(titulo, mensagem, tipo = "sucesso") {
     erroEl.style.display = "none";
     btnCancelar.style.display = "none";
     btnConfirmar.textContent = "OK";
+    btnConfirmar.style.background = "";
+    btnConfirmar.style.borderColor = "";
 
     overlay.style.display = "flex";
 
@@ -194,12 +190,68 @@ export function uiAlerta(titulo, mensagem, tipo = "sucesso") {
   });
 }
 
-/**
- * Solicita uma senha e valida antes de fechar.
- * @param {string} acaoTexto
- * @param {string} senhaCorreta
- * @returns {Promise<boolean>}
- */
+export function uiConfirmar(
+  titulo,
+  mensagem,
+  textoConfirmar = "Confirmar",
+  tipo = "aviso",
+) {
+  return new Promise((resolve) => {
+    const overlay = garantirModal();
+    const iconeEl = document.getElementById("uiModalIcone");
+    const tituloEl = document.getElementById("uiModalTitulo");
+    const textoEl = document.getElementById("uiModalTexto");
+    const inputEl = document.getElementById("uiModalInput");
+    const erroEl = document.getElementById("uiModalErro");
+    const btnCancelar = document.getElementById("uiModalCancelar");
+    const btnConfirmar = document.getElementById("uiModalConfirmar");
+
+    aplicarEstiloTipo(iconeEl, tipo);
+    tituloEl.textContent = titulo;
+    textoEl.textContent = mensagem;
+    inputEl.style.display = "none";
+    erroEl.style.display = "none";
+    btnCancelar.style.display = "inline-flex";
+    btnConfirmar.textContent = textoConfirmar;
+
+    if (tipo === "erro") {
+      btnConfirmar.style.background = "#dc2626";
+      btnConfirmar.style.borderColor = "#dc2626";
+    } else {
+      btnConfirmar.style.background = "";
+      btnConfirmar.style.borderColor = "";
+    }
+
+    overlay.style.display = "flex";
+
+    const fechar = (ok) => {
+      overlay.style.display = "none";
+      btnConfirmar.style.background = "";
+      btnConfirmar.style.borderColor = "";
+      btnConfirmar.onclick = null;
+      btnCancelar.onclick = null;
+      overlay.onclick = null;
+      document.removeEventListener("keydown", onKey);
+      resolve(ok);
+    };
+
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        fechar(false);
+      }
+    };
+
+    btnConfirmar.onclick = () => fechar(true);
+    btnCancelar.onclick = () => fechar(false);
+    overlay.onclick = (e) => {
+      if (e.target === overlay) fechar(false);
+    };
+    document.addEventListener("keydown", onKey);
+    btnCancelar.focus();
+  });
+}
+
 export function uiPedirSenha(acaoTexto, senhaCorreta) {
   return new Promise((resolve) => {
     const overlay = garantirModal();
@@ -221,6 +273,8 @@ export function uiPedirSenha(acaoTexto, senhaCorreta) {
     erroEl.style.display = "none";
     btnCancelar.style.display = "inline-flex";
     btnConfirmar.textContent = "Confirmar";
+    btnConfirmar.style.background = "";
+    btnConfirmar.style.borderColor = "";
 
     overlay.style.display = "flex";
 
