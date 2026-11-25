@@ -16,6 +16,7 @@ import {
   sincronizarServicosNaObservacao,
   bindCamposExtrasModal,
 } from "./painel-modal-campos-extras.js";
+import { comprimirImagemWeb } from "../../components/camera.js";
 import { compartilharTexto } from "./compartilhamento.js";
 import { supabaseClient } from "../../js/supabase.js";
 import { uiAlerta, uiConfirmar } from "./ui-alerta.js";
@@ -155,6 +156,43 @@ function montarTextoCompartilhamento(os, atualDraft) {
   return linhas.join("\n");
 }
 
+function montarFotosExistentesIniciais(os) {
+  const locais = Array.isArray(os?.fotos_locais)
+    ? os.fotos_locais.filter((f) => f && f.src)
+    : [];
+  if (locais.length > 0) {
+    return locais.map((f, idx) => ({
+      tipo: "existente",
+      src: f.src,
+      urlOriginal: f.urlOriginal || f.url || os?.fotos_urls?.[idx] || "",
+      disponivelOffline: Boolean(f.disponivelOffline),
+    }));
+  }
+
+  const urls = Array.isArray(os?.fotos_urls)
+    ? os.fotos_urls.filter(Boolean)
+    : [];
+  return urls.map((url) => ({
+    tipo: "existente",
+    src: url,
+    urlOriginal: url,
+    disponivelOffline: false,
+  }));
+}
+
+function limparPreviewsNovasFotos(atualDraft) {
+  if (!atualDraft || !Array.isArray(atualDraft.novasFotos)) return;
+  atualDraft.novasFotos.forEach((nf) => {
+    if (nf?.previewUrl) {
+      try {
+        URL.revokeObjectURL(nf.previewUrl);
+      } catch {
+        // ignora erro de revogação
+      }
+    }
+  });
+}
+
 async function abrirModalRelatorioEstiloCorporativo(os, atualDraft, totais) {
   if (document.getElementById("modalRelatorioOS")) return;
 
@@ -208,9 +246,7 @@ async function abrirModalRelatorioEstiloCorporativo(os, atualDraft, totais) {
       <div style="flex:1;overflow-y:auto;background:#ffffff">
         <div id="relatorioOSCaptura" style="background:#ffffff;margin:0 auto;width:100%;max-width:210mm;padding:28px 32px;font-family:'Inter',system-ui,-apple-system,sans-serif;color:#0f172a;box-sizing:border-box">
           <div style="border-bottom:2px solid #0f172a;padding-bottom:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:12px">
-            
-          
-          <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
               <img src="${esc(logoBase64 || "./assets/logo.png")}" alt="Logo" crossorigin="anonymous" style="height:56px;width:auto;object-fit:contain;border-radius:8px;flex-shrink:0" onerror="this.style.display='none'" />
               <div style="border-left:1px solid #cbd5e1;padding-left:14px">
                 <h1 style="margin:0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#0f172a">Clínica da Roda</h1>
@@ -401,6 +437,8 @@ const btnExcluirColoridoStyle = `${btnAcaoRodapeStyle};background:#dc2626;color:
 
 const btnSalvarColoridoStyle = `${btnAcaoRodapeStyle};background:#059669;color:#ffffff;border:1px solid #059669`;
 
+const MAX_FOTOS_OS = 6;
+
 export function criarModalDetalhesOS({
   overlayId = "modalOverlay",
   conteudoId = "modalConteudo",
@@ -426,6 +464,7 @@ export function criarModalDetalhesOS({
       ctrlPlaca.destruir();
       ctrlPlaca = null;
     }
+    limparPreviewsNovasFotos(draft);
     const overlay = getOverlay();
     const conteudo = getConteudo();
     if (overlay) overlay.classList.remove("aberto");
@@ -447,6 +486,22 @@ export function criarModalDetalhesOS({
       }
       el.disabled = Boolean(desabilitar);
     });
+  }
+
+  function obterListaFotosCombinadas() {
+    if (!draft) return [];
+    const existentes = (draft.fotosExistentes || []).map((item, idx) => ({
+      ...item,
+      origem: "existente",
+      indiceOrigem: idx,
+    }));
+    const novas = (draft.novasFotos || []).map((item, idx) => ({
+      ...item,
+      src: item.previewUrl,
+      origem: "nova",
+      indiceOrigem: idx,
+    }));
+    return [...existentes, ...novas];
   }
 
   function sincronizarCamposDoDom(conteudo) {
@@ -474,6 +529,16 @@ export function criarModalDetalhesOS({
     draft.observacao = getVal("editObservacao").toUpperCase();
     draft.observacao_manual = "";
     draft.desconto = Number(getVal("editDesconto") || 0);
+    draft.novas_fotos_arquivos = (draft.novasFotos || []).map(
+      (nf) => nf.fileOriginal,
+    );
+    draft.novas_fotos_miniaturas = (draft.novasFotos || []).map(
+      (nf) => nf.blobMini,
+    );
+    draft.fotos_removidas = [...(draft.fotosRemovidas || [])];
+    draft.fotos_existentes_mantidas = (draft.fotosExistentes || [])
+      .map((fe) => fe.urlOriginal || fe.src)
+      .filter(Boolean);
 
     const linhas = conteudo.querySelectorAll("tr[data-item-idx]");
     const novosItens = [];
@@ -567,15 +632,29 @@ export function criarModalDetalhesOS({
       })
       .join("");
 
-    const fotosValidas = (osAtual.fotos_locais || []).filter((f) => f.src);
-    const fotos = fotosValidas
+    const fotosCombinadas = obterListaFotosCombinadas();
+    const totalFotosAtual = fotosCombinadas.length;
+    const podeAdicionarMaisFotos = podeEditar && totalFotosAtual < MAX_FOTOS_OS;
+
+    const fotos = fotosCombinadas
       .map(
         (f, i) => `
-          <button type="button" class="foto-thumb-btn" data-foto-idx="${i}" title="${
-            f.disponivelOffline ? "Ampliar foto local" : "Ampliar foto"
-          }">
-            <img src="${esc(f.src)}" alt="Foto OS ${i + 1}" />
-          </button>`,
+          <div style="position:relative;display:inline-flex;border-radius:11px">
+            <button type="button" class="foto-thumb-btn" data-foto-idx="${i}" title="${
+              f.origem === "nova"
+                ? "Nova foto (será enviada ao salvar)"
+                : f.disponivelOffline
+                  ? "Ampliar foto local"
+                  : "Ampliar foto"
+            }">
+              <img src="${esc(f.src)}" alt="Foto OS ${i + 1}" />
+            </button>
+            ${
+              podeEditar
+                ? `<button type="button" class="btn-excluir-foto" data-foto-origem="${f.origem}" data-foto-idx-origem="${f.indiceOrigem}" title="Excluir foto" aria-label="Excluir foto ${i + 1}" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:999px;border:1px solid #ffffff;background:#dc2626;color:#ffffff;font-size:13px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,0.28)">×</button>`
+                : ""
+            }
+          </div>`,
       )
       .join("");
 
@@ -604,11 +683,11 @@ export function criarModalDetalhesOS({
             <span>Telefone</span>
             ${renderBotoesTelefoneExtras("editTelefone")}
           </label>
-         <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d0d5db;border-radius:6px;padding:3px 8px">
-  <button type="button" id="btnPaisTelefone" data-pais="BR" title="Trocar País (BR / PY)" style="flex-shrink:0;white-space:nowrap;background:rgba(255,196,0,0.14);border:1px solid rgba(202,138,4,0.38);border-radius:6px;padding:2px 6px;font-size:12px;font-weight:700;color:#92400e;cursor:pointer;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;transition:all .15s ease" ${podeEditar ? "" : "disabled"}>BR</button>
-  <span id="editTelefoneDdi" class="mono" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:700;color:#92400e;line-height:1;user-select:none">+55</span>
-  <input id="editTelefone" type="tel" inputmode="numeric" class="mono" style="flex:1 1 auto;min-width:0;width:100%;box-sizing:border-box;background:transparent;color:#1a1f26;border:0;padding:4px 2px;font-size:13px;outline:none" value="${esc(draft.telefone)}" placeholder="(00) 00000-0000" ${podeEditar ? "" : "disabled"} />
-</div>
+          <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d0d5db;border-radius:6px;padding:3px 8px">
+            <button type="button" id="btnPaisTelefone" data-pais="BR" title="Trocar País (BR / PY)" style="flex-shrink:0;white-space:nowrap;background:rgba(255,196,0,0.14);border:1px solid rgba(202,138,4,0.38);border-radius:6px;padding:2px 6px;font-size:12px;font-weight:700;color:#92400e;cursor:pointer;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;transition:all .15s ease" ${podeEditar ? "" : "disabled"}>BR</button>
+            <span id="editTelefoneDdi" class="mono" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:700;color:#92400e;line-height:1;user-select:none">+55</span>
+            <input id="editTelefone" type="tel" inputmode="numeric" class="mono" style="flex:1 1 auto;min-width:0;width:100%;box-sizing:border-box;background:transparent;color:#1a1f26;border:0;padding:4px 2px;font-size:13px;outline:none" value="${esc(draft.telefone)}" placeholder="(00) 00000-0000" ${podeEditar ? "" : "disabled"} />
+          </div>
         </div>
         <div class="prop-item">
           <label for="editDocumento" style="display:flex;justify-content:space-between;align-items:center">
@@ -669,8 +748,8 @@ export function criarModalDetalhesOS({
           <div class="prop-item">
             <label for="editStatus">Status</label>
             <div style="display:flex;gap:6px;align-items:center">
-              <input id="editStatus" type="text" readonly style="${inputSoftStyle};background:#f3f4f6;color:${corStatus};font-weight:600;cursor:default" value="${esc(draft.status)}" />
-              <button type="button" id="btnToggleCancelar" class="btn" style="padding:7px 10px;font-size:12px;white-space:nowrap" ${podeEditar ? "" : "disabled"}>${estaCancelada ? "Reativar" : "Cancelar"}</button>
+              <input id="editStatus" type="text" readonly style="${inputSoftStyle};height:36px;padding:0 10px;background:#f3f4f6;color:${corStatus};font-weight:600;cursor:default;flex:1;min-width:0" value="${esc(draft.status)}" />
+              <button type="button" id="btnToggleCancelar" style="height:36px;padding:0 12px;border-radius:8px;border:1px solid #d0d5db;background:#ffffff;color:#1a1f26;font-size:12px;font-weight:600;line-height:1;white-space:nowrap;cursor:pointer;box-sizing:border-box;flex-shrink:0" ${podeEditar ? "" : "disabled"}>${estaCancelada ? "Reativar" : "Cancelar"}</button>
             </div>
           </div>
         </div>
@@ -707,8 +786,15 @@ export function criarModalDetalhesOS({
         <div><span style="color:#7a8494;font-size:12px">Total:</span> <strong id="resumoTotal" class="mono">${brl(totais.valorFinal)}</strong></div>
       </div>
 
-      <div class="section-heading">Galeria de Fotos (Local)</div>
-      <div class="modal-gallery">${fotos || '<span style="color:#7a8494;font-size:13px">Nenhuma foto salva localmente nesta OS.</span>'}</div>
+      <div class="section-heading" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span>Galeria de Fotos (${totalFotosAtual}/${MAX_FOTOS_OS})</span>
+        <div style="display:inline-flex;align-items:center;gap:8px">
+          <input id="editFotosInput" type="file" accept="image/*" capture="environment" multiple style="display:none" />
+          <button id="btnAdicionarFotoOS" class="btn btn-sm" type="button" ${podeAdicionarMaisFotos ? "" : "disabled"}>+ Adicionar foto</button>
+        </div>
+      </div>
+      <div id="statusCompressaoFotosOS" style="display:none;font-size:12px;font-weight:600;color:#1f5fbf;margin-bottom:8px"></div>
+      <div class="modal-gallery">${fotos || '<span style="color:#7a8494;font-size:13px">Nenhuma foto nesta OS.</span>'}</div>
 
       <div class="modal-actions" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -747,13 +833,115 @@ export function criarModalDetalhesOS({
         ),
     });
 
+    const inpFotos = conteudo.querySelector("#editFotosInput");
+    const btnAddFoto = conteudo.querySelector("#btnAdicionarFotoOS");
+    const statusFotos = conteudo.querySelector("#statusCompressaoFotosOS");
+
+    btnAddFoto?.addEventListener("click", () => {
+      if (!podeAdicionarMaisFotos || !inpFotos) return;
+      inpFotos.click();
+    });
+
+    inpFotos?.addEventListener("change", async (e) => {
+      if (!draft || !podeEditar) return;
+      const arquivos = Array.from(e.target.files || []).filter((f) =>
+        f.type.startsWith("image/"),
+      );
+      e.target.value = "";
+      if (!arquivos.length) return;
+
+      const vagasRestantes =
+        MAX_FOTOS_OS -
+        ((draft.fotosExistentes?.length || 0) +
+          (draft.novasFotos?.length || 0));
+      if (vagasRestantes <= 0) return;
+
+      const selecionados = arquivos.slice(0, vagasRestantes);
+      definirBotoesDesabilitados(true);
+      if (statusFotos) {
+        statusFotos.style.display = "block";
+      }
+
+      try {
+        for (let i = 0; i < selecionados.length; i++) {
+          if (statusFotos) {
+            statusFotos.textContent = `Comprimindo foto ${i + 1} de ${selecionados.length}...`;
+          }
+          const { original, blobMini } = await comprimirImagemWeb(
+            selecionados[i],
+            {
+              maxOriginal: 1024,
+              qualidadeOriginal: 0.7,
+              maxMini: 300,
+              qualidadeMini: 0.6,
+            },
+          );
+          const previewUrl = URL.createObjectURL(blobMini);
+          draft.novasFotos.push({
+            fileOriginal: original,
+            blobMini,
+            previewUrl,
+          });
+        }
+        render();
+      } catch (err) {
+        console.error("Erro ao comprimir foto na OS:", err);
+        await uiAlerta(
+          "Erro na imagem",
+          err?.message || "Não foi possível processar a foto selecionada.",
+          "erro",
+        );
+        render();
+      }
+    });
+
+    conteudo.querySelectorAll(".btn-excluir-foto").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!draft || !podeEditar) return;
+
+        const ok = await uiConfirmar(
+          "Excluir foto",
+          "Deseja remover esta foto da Ordem de Serviço?",
+          "Excluir foto",
+          "aviso",
+        );
+        if (!ok) return;
+
+        const origem = btn.dataset.fotoOrigem;
+        const idx = Number(btn.dataset.fotoIdxOrigem);
+        if (Number.isNaN(idx)) return;
+
+        if (origem === "nova") {
+          const removida = draft.novasFotos[idx];
+          if (removida?.previewUrl) {
+            try {
+              URL.revokeObjectURL(removida.previewUrl);
+            } catch {
+              // ignora erro de revogação
+            }
+          }
+          draft.novasFotos.splice(idx, 1);
+        } else if (origem === "existente") {
+          const [removida] = draft.fotosExistentes.splice(idx, 1);
+          const urlAlvo = removida?.urlOriginal || removida?.src || "";
+          if (urlAlvo) {
+            draft.fotosRemovidas.push(urlAlvo);
+          }
+        }
+
+        render();
+      });
+    });
+
     conteudo
       .querySelector("#btnCompartilharOS")
       ?.addEventListener("click", async () => {
         sincronizarCamposDoDom(conteudo);
         sincronizarServicosNaObservacao(conteudo, draft);
         const texto = montarTextoCompartilhamento(osAtual, draft);
-        const fotoUrl = fotosValidas[0]?.src || osAtual.fotos_urls?.[0] || "";
+        const fotoUrl =
+          fotosCombinadas[0]?.src || osAtual.fotos_urls?.[0] || "";
         await compartilharTexto({
           titulo: `OS #${osAtual.id ?? osAtual.uuid_local ?? ""}`,
           texto,
@@ -815,8 +1003,14 @@ export function criarModalDetalhesOS({
     conteudo.querySelectorAll(".foto-thumb-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const idx = Number(btn.dataset.fotoIdx);
+        const galeriaParaVisualizar = fotosCombinadas.map((f) => ({
+          src: f.src,
+          disponivelOffline: Boolean(
+            f.disponivelOffline || f.origem === "nova",
+          ),
+        }));
         if (typeof onAbrirFoto === "function") {
-          onAbrirFoto(fotosValidas, Number.isNaN(idx) ? 0 : idx);
+          onAbrirFoto(galeriaParaVisualizar, Number.isNaN(idx) ? 0 : idx);
         }
       });
     });
@@ -978,12 +1172,19 @@ export function criarModalDetalhesOS({
         sincronizarCamposDoDom(conteudo);
         sincronizarServicosNaObservacao(conteudo, draft);
         const patch = montarPatchOS(draft);
-        onAtualizarOS(osAtual, patch);
+        onAtualizarOS(osAtual, {
+          ...patch,
+          novas_fotos_arquivos: draft.novas_fotos_arquivos,
+          novas_fotos_miniaturas: draft.novas_fotos_miniaturas,
+          fotos_removidas: draft.fotos_removidas,
+          fotos_existentes_mantidas: draft.fotos_existentes_mantidas,
+        });
       });
   }
 
   async function abrir(o) {
     if (!o) return;
+    limparPreviewsNovasFotos(draft);
     osAtual = o;
 
     const obsInicial = [
@@ -1017,6 +1218,13 @@ export function criarModalDetalhesOS({
       itens_servicos: Array.isArray(o.itens_servicos)
         ? o.itens_servicos.map((it) => ({ ...it }))
         : [],
+      fotosExistentes: montarFotosExistentesIniciais(o),
+      novasFotos: [],
+      fotosRemovidas: [],
+      novas_fotos_arquivos: [],
+      novas_fotos_miniaturas: [],
+      fotos_removidas: [],
+      fotos_existentes_mantidas: [],
     };
 
     baseDraft.status = calcularStatusPorDocumentos(baseDraft);
