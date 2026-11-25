@@ -332,19 +332,30 @@ export function criarGerenciadorCards({
   async function atualizarOS(os, patch) {
     modalOS.definirBotoesDesabilitados(true);
 
+    const {
+      novas_fotos_arquivos = [],
+      novas_fotos_miniaturas = [],
+      fotos_removidas = [],
+      fotos_existentes_mantidas = [],
+      ...patchTabela
+    } = patch || {};
+
     try {
       const { error } = await supabaseClient
         .from("ordens_servico")
-        .update(patch)
+        .update(patchTabela)
         .eq("id", os.id);
 
       if (error) throw error;
 
-      Object.assign(os, patch);
+      Object.assign(os, patchTabela);
       try {
         const registroCache = await painelDb.ordens_servico.get(os.id);
         if (registroCache) {
-          await osCache.atualizarRegistroLocal({ ...registroCache, ...patch });
+          await osCache.atualizarRegistroLocal({
+            ...registroCache,
+            ...patchTabela,
+          });
         }
       } catch (cacheErr) {
         console.warn(

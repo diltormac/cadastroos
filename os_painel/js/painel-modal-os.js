@@ -193,6 +193,43 @@ function limparPreviewsNovasFotos(atualDraft) {
   });
 }
 
+async function enviarNovasFotosStorage(novasFotos = []) {
+  const urlsEnviadas = [];
+
+  for (const nf of novasFotos) {
+    if (nf?.urlEnviada) {
+      urlsEnviadas.push(nf.urlEnviada);
+      continue;
+    }
+
+    const blobParaEnviar = nf?.fileOriginal || nf?.blobMini;
+    if (!blobParaEnviar) continue;
+
+    const nomeArquivo = `${Date.now()}-${Math.random().toString(36).substring(2)}.jpeg`;
+    const { error: errUp } = await supabaseClient.storage
+      .from("fotos-ordens")
+      .upload(nomeArquivo, blobParaEnviar);
+
+    if (errUp) {
+      throw new Error("Erro upload original: " + errUp.message);
+    }
+
+    const { data: urlData } = supabaseClient.storage
+      .from("fotos-ordens")
+      .getPublicUrl(nomeArquivo);
+
+    const urlPublica = urlData?.publicUrl || "";
+    if (!urlPublica) {
+      throw new Error("Não foi possível obter a URL pública da foto enviada.");
+    }
+
+    nf.urlEnviada = urlPublica;
+    urlsEnviadas.push(urlPublica);
+  }
+
+  return urlsEnviadas;
+}
+
 async function abrirModalRelatorioEstiloCorporativo(os, atualDraft, totais) {
   if (document.getElementById("modalRelatorioOS")) return;
 
@@ -437,16 +474,16 @@ const btnExcluirColoridoStyle = `${btnAcaoRodapeStyle};background:#dc2626;color:
 
 const btnSalvarColoridoStyle = `${btnAcaoRodapeStyle};background:#059669;color:#ffffff;border:1px solid #059669`;
 
-const MAX_FOTOS_OS = 6;
-
 export function criarModalDetalhesOS({
   overlayId = "modalOverlay",
   conteudoId = "modalConteudo",
+  maxFotos = 6,
   onAbrirFoto,
   onAtualizarOS,
   onExcluirOS,
   onFechar,
 } = {}) {
+  const maxFotosOS = Number(maxFotos) > 0 ? Number(maxFotos) : 6;
   const getOverlay = () => document.getElementById(overlayId);
   const getConteudo = () => document.getElementById(conteudoId);
 
@@ -634,7 +671,7 @@ export function criarModalDetalhesOS({
 
     const fotosCombinadas = obterListaFotosCombinadas();
     const totalFotosAtual = fotosCombinadas.length;
-    const podeAdicionarMaisFotos = podeEditar && totalFotosAtual < MAX_FOTOS_OS;
+    const podeAdicionarMaisFotos = podeEditar && totalFotosAtual < maxFotosOS;
 
     const fotos = fotosCombinadas
       .map(
@@ -787,7 +824,7 @@ export function criarModalDetalhesOS({
       </div>
 
       <div class="section-heading" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-        <span>Galeria de Fotos (${totalFotosAtual}/${MAX_FOTOS_OS})</span>
+        <span>Galeria de Fotos (${totalFotosAtual}/${maxFotosOS})</span>
         <div style="display:inline-flex;align-items:center;gap:8px">
           <input id="editFotosInput" type="file" accept="image/*" capture="environment" multiple style="display:none" />
           <button id="btnAdicionarFotoOS" class="btn btn-sm" type="button" ${podeAdicionarMaisFotos ? "" : "disabled"}>+ Adicionar foto</button>
@@ -851,7 +888,7 @@ export function criarModalDetalhesOS({
       if (!arquivos.length) return;
 
       const vagasRestantes =
-        MAX_FOTOS_OS -
+        maxFotosOS -
         ((draft.fotosExistentes?.length || 0) +
           (draft.novasFotos?.length || 0));
       if (vagasRestantes <= 0) return;
@@ -881,6 +918,7 @@ export function criarModalDetalhesOS({
             fileOriginal: original,
             blobMini,
             previewUrl,
+            urlEnviada: null,
           });
         }
         render();
@@ -1168,17 +1206,46 @@ export function criarModalDetalhesOS({
 
     conteudo
       .querySelector("#btnSalvarAlteracoes")
-      ?.addEventListener("click", () => {
+      ?.addEventListener("click", async () => {
         sincronizarCamposDoDom(conteudo);
         sincronizarServicosNaObservacao(conteudo, draft);
         const patch = montarPatchOS(draft);
-        onAtualizarOS(osAtual, {
-          ...patch,
-          novas_fotos_arquivos: draft.novas_fotos_arquivos,
-          novas_fotos_miniaturas: draft.novas_fotos_miniaturas,
-          fotos_removidas: draft.fotos_removidas,
-          fotos_existentes_mantidas: draft.fotos_existentes_mantidas,
-        });
+
+        definirBotoesDesabilitados(true);
+        if (statusFotos && (draft.novasFotos || []).length > 0) {
+          statusFotos.style.display = "block";
+          statusFotos.textContent = "Enviando novas fotos...";
+        }
+
+        try {
+          const urlsNovas = await enviarNovasFotosStorage(
+            draft.novasFotos || [],
+          );
+          const urlsFinais = [
+            ...new Set([
+              ...(draft.fotos_existentes_mantidas || []),
+              ...urlsNovas,
+            ]),
+          ];
+
+          await onAtualizarOS(osAtual, {
+            ...patch,
+            fotos_urls: urlsFinais,
+            novas_fotos_arquivos: draft.novas_fotos_arquivos,
+            novas_fotos_miniaturas: draft.novas_fotos_miniaturas,
+            fotos_removidas: draft.fotos_removidas,
+            fotos_existentes_mantidas: draft.fotos_existentes_mantidas,
+          });
+        } catch (err) {
+          console.error("Falha ao enviar/salvar fotos da OS:", err);
+          definirBotoesDesabilitados(false);
+          if (statusFotos) statusFotos.style.display = "none";
+          await uiAlerta(
+            "Erro ao salvar fotos",
+            err?.message || "Não foi possível enviar as fotos para o servidor.",
+            "erro",
+          );
+        }
       });
   }
 

@@ -66,6 +66,7 @@ async function lerFotosDaGaleriaOSFacil() {
 export function criarGaleriaOffline({
   overlayId = "galeriaOfflineOverlay",
   onAbrirLightbox,
+  onAbrirOS,
   onAviso,
 } = {}) {
   const dataUrlCache = new Map();
@@ -204,25 +205,35 @@ export function criarGaleriaOffline({
           .join(" · ");
 
         return `
-          <button type="button" class="galeria-offline-item" data-idx="${idx}" title="${legenda}">
-            <img src="${esc(item.src)}" alt="Foto ${idx + 1}" loading="lazy" />
+          <div class="galeria-offline-item" data-idx="${idx}" title="${legenda}">
+            <button type="button" class="galeria-offline-foto-btn" data-idx="${idx}" data-os-id="${esc(item.osId)}" style="all:unset;cursor:pointer;display:block;width:100%">
+              <img src="${esc(item.src)}" alt="Foto ${idx + 1}" loading="lazy" />
+            </button>
             ${legenda ? `<span class="galeria-offline-legenda mono">${legenda}</span>` : ""}
-          </button>
+          </div>
         `;
       })
       .join("");
 
-    grid.querySelectorAll(".galeria-offline-item").forEach((btn) => {
+    grid.querySelectorAll(".galeria-offline-foto-btn").forEach((btn) => {
       const img = btn.querySelector("img");
       img?.addEventListener("error", () => {
-        btn.remove();
+        btn.closest(".galeria-offline-item")?.remove();
         atualizarContador(
           grid.querySelectorAll(".galeria-offline-item").length,
         );
       });
 
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const idx = Number(btn.dataset.idx);
+        const item = fotosAtuais[Number.isNaN(idx) ? 0 : idx];
+        const osId = item?.osId || btn.dataset.osId || "";
+
+        if (osId && typeof onAbrirOS === "function") {
+          await onAbrirOS(osId);
+          return;
+        }
+
         if (typeof onAbrirLightbox === "function") {
           onAbrirLightbox(fotosAtuais, Number.isNaN(idx) ? 0 : idx);
         }
