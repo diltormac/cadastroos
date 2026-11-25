@@ -7,7 +7,7 @@
    - Navegação (HTML) → network-first com fallback cache
    ========================================================= */
 
-const VERSAO = "v30";
+const VERSAO = "v31";
 const CACHE_SHELL = `painel-shell-${VERSAO}`;
 const CACHE_CDN = `painel-cdn-${VERSAO}`;
 const CACHE_API = `painel-api-${VERSAO}`;

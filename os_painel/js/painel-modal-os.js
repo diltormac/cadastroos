@@ -3,7 +3,6 @@ import {
   carregarCatalogoServicos,
   criarControladorPlaca,
   maskCPF,
-  formatarTelefoneInteligente,
   normalizarNomeServico,
   isReforma,
   isConsertoOuSolda,
@@ -13,6 +12,7 @@ import {
 import {
   renderBotaoCopiar,
   renderBotoesTelefoneExtras,
+  normalizarTelefoneSomenteDigitos,
   sincronizarServicosNaObservacao,
   bindCamposExtrasModal,
 } from "./painel-modal-campos-extras.js";
@@ -116,48 +116,41 @@ function calcularStatusPorDocumentos(draft) {
   return "Pendente";
 }
 
-function montarTextoCompartilhamento(os, atualDraft, totais) {
-  const linhas = [
-    `OS #${os?.id ?? os?.uuid_local ?? "—"} — ${atualDraft?.nome || "CONSUMIDOR"}`,
-    `Status: ${atualDraft?.status || "Pendente"}`,
-  ];
+function montarTextoCompartilhamento(os, atualDraft) {
+  const linhas = [];
 
-  if (atualDraft?.telefone) linhas.push(`Telefone: ${atualDraft.telefone}`);
-  if (atualDraft?.placa) linhas.push(`Placa: ${atualDraft.placa}`);
-  if (atualDraft?.aparelho)
-    linhas.push(`Veículo/Aparelho: ${atualDraft.aparelho}`);
-  if (atualDraft?.cor) linhas.push(`Cor: ${atualDraft.cor}`);
-  if (atualDraft?.numero_os)
-    linhas.push(`Nº OS Reforma: ${atualDraft.numero_os}`);
-  if (atualDraft?.numero_os_conserto) {
-    linhas.push(`Nº OS Conserto: ${atualDraft.numero_os_conserto}`);
+  const cliente = String(atualDraft?.nome || os?.nome || "CONSUMIDOR").trim();
+  if (cliente) linhas.push(`Cliente: ${cliente}`);
+
+  const placa = String(atualDraft?.placa || os?.placa || "").trim();
+  if (placa) linhas.push(`Placa: ${placa}`);
+
+  const cor = String(atualDraft?.cor || os?.cor || "").trim();
+  if (cor) linhas.push(`Cor: ${cor}`);
+
+  const numeros = [];
+  const numReforma = String(
+    atualDraft?.numero_os ?? os?.numero_os ?? "",
+  ).trim();
+  const numConserto = String(
+    atualDraft?.numero_os_conserto ?? os?.numero_os_conserto ?? "",
+  ).trim();
+  const regOs = String(atualDraft?.registro_os ?? os?.registro_os ?? "").trim();
+  const numVenda = String(
+    atualDraft?.numero_venda ?? os?.numero_venda ?? "",
+  ).trim();
+
+  if (numReforma) numeros.push(`Reforma: ${numReforma}`);
+  if (numConserto) numeros.push(`Conserto: ${numConserto}`);
+  if (regOs) numeros.push(`Registro: ${regOs}`);
+  if (numVenda) numeros.push(`Venda: ${numVenda}`);
+
+  if (numeros.length > 0) {
+    linhas.push(`Números: ${numeros.join(" | ")}`);
   }
-  if (atualDraft?.registro_os)
-    linhas.push(`Registro OS: ${atualDraft.registro_os}`);
-  if (atualDraft?.numero_venda)
-    linhas.push(`Nº Venda: ${atualDraft.numero_venda}`);
 
-  if (Array.isArray(totais?.itens) && totais.itens.length > 0) {
-    linhas.push("Itens:");
-    totais.itens.forEach((it) => {
-      const nome = it.servico || it.nome || "ITEM";
-      linhas.push(
-        `- ${nome} (${it.quantidade}x ${brl(it.valor_unitario)}) = ${brl(it.valor)}`,
-      );
-    });
-  }
-
-  linhas.push(`Subtotal: ${brl(totais?.subtotal)}`);
-  if (Number(totais?.desconto || 0) > 0) {
-    linhas.push(`Desconto: ${brl(totais.desconto)}`);
-  }
-  linhas.push(`Total: ${brl(totais?.valorFinal)}`);
-
-  const obs = [atualDraft?.observacao, atualDraft?.observacao_manual]
-    .map((v) => String(v || "").trim())
-    .filter(Boolean)
-    .join(" | ");
-  if (obs) linhas.push(`Obs: ${obs}`);
+  const obs = String(atualDraft?.observacao ?? os?.observacao ?? "").trim();
+  if (obs) linhas.push(`Observações: ${obs}`);
 
   return linhas.join("\n");
 }
@@ -215,7 +208,9 @@ async function abrirModalRelatorioEstiloCorporativo(os, atualDraft, totais) {
       <div style="flex:1;overflow-y:auto;background:#ffffff">
         <div id="relatorioOSCaptura" style="background:#ffffff;margin:0 auto;width:100%;max-width:210mm;padding:28px 32px;font-family:'Inter',system-ui,-apple-system,sans-serif;color:#0f172a;box-sizing:border-box">
           <div style="border-bottom:2px solid #0f172a;padding-bottom:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:12px">
-            <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
+            
+          
+          <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
               <img src="${esc(logoBase64 || "./assets/logo.png")}" alt="Logo" crossorigin="anonymous" style="height:56px;width:auto;object-fit:contain;border-radius:8px;flex-shrink:0" onerror="this.style.display='none'" />
               <div style="border-left:1px solid #cbd5e1;padding-left:14px">
                 <h1 style="margin:0;font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#0f172a">Clínica da Roda</h1>
@@ -458,9 +453,14 @@ export function criarModalDetalhesOS({
     if (!draft || !conteudo) return;
 
     const getVal = (id) => conteudo.querySelector(`#${id}`)?.value ?? "";
+    const paisTel =
+      conteudo.querySelector("#btnPaisTelefone")?.dataset.pais || "BR";
 
     draft.nome = getVal("editNome").toUpperCase();
-    draft.telefone = getVal("editTelefone");
+    draft.telefone = normalizarTelefoneSomenteDigitos(
+      getVal("editTelefone"),
+      paisTel,
+    );
     draft.documento = getVal("editDocumento");
     draft.placa = getVal("editPlaca").toUpperCase();
     draft.aparelho = getVal("editAparelho");
@@ -584,7 +584,7 @@ export function criarModalDetalhesOS({
 
       <div class="modal-top">
         <div>
-          <h2>${esc(draft.nome || "CONSUMIDOR")}</h2>
+          <h2 id="tituloModalCliente">${esc(draft.nome || "CONSUMIDOR")}</h2>
           <small class="mono">OS #${esc(osAtual.id ?? osAtual.uuid_local ?? "—")} · ${d ? new Date(d).toLocaleString("pt-BR") : "—"}</small>
         </div>
         <button class="btn-close" id="btnFechar" type="button" aria-label="Fechar">×</button>
@@ -604,7 +604,11 @@ export function criarModalDetalhesOS({
             <span>Telefone</span>
             ${renderBotoesTelefoneExtras("editTelefone")}
           </label>
-          <input id="editTelefone" type="tel" class="mono" style="${inputSoftStyle}" value="${esc(draft.telefone)}" placeholder="+55 (00) 00000-0000" ${podeEditar ? "" : "disabled"} />
+         <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d0d5db;border-radius:6px;padding:3px 8px">
+  <button type="button" id="btnPaisTelefone" data-pais="BR" title="Trocar País (BR / PY)" style="flex-shrink:0;white-space:nowrap;background:rgba(255,196,0,0.14);border:1px solid rgba(202,138,4,0.38);border-radius:6px;padding:2px 6px;font-size:12px;font-weight:700;color:#92400e;cursor:pointer;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;transition:all .15s ease" ${podeEditar ? "" : "disabled"}>BR</button>
+  <span id="editTelefoneDdi" class="mono" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:700;color:#92400e;line-height:1;user-select:none">+55</span>
+  <input id="editTelefone" type="tel" inputmode="numeric" class="mono" style="flex:1 1 auto;min-width:0;width:100%;box-sizing:border-box;background:transparent;color:#1a1f26;border:0;padding:4px 2px;font-size:13px;outline:none" value="${esc(draft.telefone)}" placeholder="(00) 00000-0000" ${podeEditar ? "" : "disabled"} />
+</div>
         </div>
         <div class="prop-item">
           <label for="editDocumento" style="display:flex;justify-content:space-between;align-items:center">
@@ -629,7 +633,7 @@ export function criarModalDetalhesOS({
         </div>
         <div class="prop-item">
           <label for="editCor">Cor</label>
-          <input id="editCor" type="text" style="${inputSoftStyle}" value="${esc(draft.cor)}" placeholder="PRATA, PRETO..." ${podeEditar ? "" : "disabled"} />
+          <input id="editCor" type="text" style="${inputSoftStyle};text-transform:uppercase" value="${esc(draft.cor)}" placeholder="PRATA, PRETO..." ${podeEditar ? "" : "disabled"} />
         </div>
         <div class="prop-item full">
           <label for="editObservacao" style="display:flex;justify-content:space-between;align-items:center">
@@ -725,11 +729,15 @@ export function criarModalDetalhesOS({
 
     conteudo.querySelector("#btnFechar")?.addEventListener("click", fechar);
 
+    conteudo.querySelector("#editNome")?.addEventListener("input", (e) => {
+      const titulo = conteudo.querySelector("#tituloModalCliente");
+      if (titulo) {
+        titulo.textContent = e.target.value.trim() || "CONSUMIDOR";
+      }
+    });
+
     bindCamposExtrasModal(conteudo, {
       getDraft: () => draft,
-      getOsAtual: () => osAtual,
-      calcularTotaisOS,
-      montarTextoCompartilhamento,
       sincronizarCamposDoDom,
       onTelefoneInvalido: () =>
         uiAlerta(
@@ -744,8 +752,7 @@ export function criarModalDetalhesOS({
       ?.addEventListener("click", async () => {
         sincronizarCamposDoDom(conteudo);
         sincronizarServicosNaObservacao(conteudo, draft);
-        const tot = calcularTotaisOS(draft.itens_servicos, draft.desconto);
-        const texto = montarTextoCompartilhamento(osAtual, draft, tot);
+        const texto = montarTextoCompartilhamento(osAtual, draft);
         const fotoUrl = fotosValidas[0]?.src || osAtual.fotos_urls?.[0] || "";
         await compartilharTexto({
           titulo: `OS #${osAtual.id ?? osAtual.uuid_local ?? ""}`,
@@ -766,11 +773,12 @@ export function criarModalDetalhesOS({
     conteudo
       .querySelector("#btnExcluirOS")
       ?.addEventListener("click", async () => {
-        if (!podeEditar) return;
-        const nomeCliente = draft.nome || osAtual.nome || "cliente sem nome";
+        if (!podeEditar || !osAtual || osAtual.id == null) return;
+        const idAlvo = osAtual.id;
+        const nomeCliente = draft?.nome || osAtual?.nome || "cliente sem nome";
         const ok = await uiConfirmar(
           "Excluir Ordem de Serviço",
-          `Deseja realmente excluir a OS #${osAtual.id} de ${nomeCliente}? Essa ação não pode ser desfeita.`,
+          `Deseja realmente excluir a OS #${idAlvo} de ${nomeCliente}? Essa ação não pode ser desfeita.`,
           "Excluir OS",
           "erro",
         );
@@ -780,17 +788,17 @@ export function criarModalDetalhesOS({
         try {
           if (typeof onExcluirOS === "function") {
             await onExcluirOS(osAtual);
-          } else if (supabaseClient && osAtual.id != null) {
+          } else if (supabaseClient) {
             const { error } = await supabaseClient
               .from("ordens_servico")
               .delete()
-              .eq("id", osAtual.id);
+              .eq("id", idAlvo);
             if (error) throw error;
           }
           fechar();
           await uiAlerta(
             "OS excluída",
-            `A OS #${osAtual.id} foi excluída com sucesso.`,
+            `A OS #${idAlvo} foi excluída com sucesso.`,
             "sucesso",
           );
         } catch (err) {
@@ -798,7 +806,7 @@ export function criarModalDetalhesOS({
           definirBotoesDesabilitados(false);
           await uiAlerta(
             "Erro ao excluir OS",
-            err.message || "Não foi possível excluir a OS.",
+            err?.message || "Não foi possível excluir a OS.",
             "erro",
           );
         }
@@ -858,11 +866,6 @@ export function criarModalDetalhesOS({
     const inpCpf = conteudo.querySelector("#editDocumento");
     inpCpf?.addEventListener("input", (e) => {
       e.target.value = maskCPF(e.target.value);
-    });
-
-    const inpTel = conteudo.querySelector("#editTelefone");
-    inpTel?.addEventListener("input", (e) => {
-      e.target.value = formatarTelefoneInteligente(e.target.value);
     });
 
     const inpPlaca = conteudo.querySelector("#editPlaca");

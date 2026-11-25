@@ -19,6 +19,108 @@ export function renderBotoesTelefoneExtras(targetId = "editTelefone") {
   `;
 }
 
+export function maskBR(valor) {
+  const d = String(valor || "")
+    .replace(/\D/g, "")
+    .slice(0, 11);
+  if (d.length > 2) {
+    return `(${d.slice(0, 2)}) ${d.slice(2)}`.replace(
+      /(\(\d{2}\)) (\d{5})(\d{1,4})/,
+      "$1 $2-$3",
+    );
+  }
+  return d;
+}
+
+export function maskPY(valor) {
+  let d = String(valor || "").replace(/\D/g, "");
+  if (d.startsWith("0")) d = d.slice(1);
+  d = d.slice(0, 9);
+  if (d.length > 3) {
+    return `(${d.slice(0, 3)}) ${d.slice(3)}`.replace(
+      /\((\d{3})\) (\d{3})(\d{1,3})/,
+      "($1) $2-$3",
+    );
+  }
+  return d;
+}
+
+export function formatarTelefoneLocal(valor, pais = "BR") {
+  return pais === "PY" ? maskPY(valor) : maskBR(valor);
+}
+
+// Alias de compatibilidade
+export const formatarTelefoneBR = formatarTelefoneLocal;
+
+export function extrairPaisENumeroLocal(valorSalvo) {
+  const bruto = String(valorSalvo || "").trim();
+  const digitos = bruto.replace(/\D/g, "");
+  if (!digitos) return { pais: "BR", localFormatado: "" };
+
+  if (
+    bruto.startsWith("+595") ||
+    (digitos.startsWith("595") && digitos.length >= 11)
+  ) {
+    const local = digitos.slice(3);
+    return { pais: "PY", localFormatado: maskPY(local) };
+  }
+
+  if (
+    bruto.startsWith("+55") ||
+    (digitos.startsWith("55") && digitos.length >= 12)
+  ) {
+    const local = digitos.slice(2);
+    return { pais: "BR", localFormatado: maskBR(local) };
+  }
+
+  if (digitos.length === 9 && digitos.startsWith("9")) {
+    return { pais: "PY", localFormatado: maskPY(digitos) };
+  }
+
+  return { pais: "BR", localFormatado: maskBR(digitos) };
+}
+
+export function normalizarTelefoneSomenteDigitos(valor, pais = "BR") {
+  let digitos = String(valor || "").replace(/\D/g, "");
+  if (!digitos) return "";
+
+  if (pais === "PY") {
+    if (digitos.startsWith("595") && digitos.length >= 11) {
+      digitos = digitos.slice(3);
+    }
+    if (digitos.startsWith("0")) {
+      digitos = digitos.slice(1);
+    }
+    digitos = digitos.slice(0, 9);
+    return digitos ? `595${digitos}` : "";
+  }
+
+  if (digitos.startsWith("55") && digitos.length >= 12) {
+    digitos = digitos.slice(2);
+  }
+  digitos = digitos.slice(0, 11);
+  return digitos ? `55${digitos}` : "";
+}
+
+export function obterSaudacaoPorHorario(dataRef = new Date()) {
+  const hora = dataRef.getHours();
+  if (hora >= 5 && hora < 12) return "Bom dia";
+  if (hora >= 12 && hora < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+export function montarMensagemWhatsAppEmpresarial(nomeCliente) {
+  const saudacao = obterSaudacaoPorHorario();
+  const nome = String(nomeCliente || "").trim();
+  const ehConsumidor = !nome || nome.toUpperCase() === "CONSUMIDOR";
+
+  const cumprimento = ehConsumidor
+    ? `Olá, ${saudacao.toLowerCase()}!`
+    : `Olá, ${nome}, ${saudacao.toLowerCase()}!`;
+
+  return `${cumprimento} Aqui é da *Clínica da Roda*. Tudo bem?`;
+}
+
 export async function copiarTextoCampo(valor, btn) {
   const texto = String(valor || "").trim();
   if (!texto) return;
@@ -49,17 +151,12 @@ export async function copiarTextoCampo(valor, btn) {
   }
 }
 
-export function normalizarTelefoneWhatsApp(valor) {
-  let digitos = String(valor || "").replace(/\D/g, "");
-  if (!digitos) return "";
-  if (digitos.length === 10 || digitos.length === 11) {
-    digitos = `55${digitos}`;
-  }
-  return digitos;
+export function normalizarTelefoneWhatsApp(valor, pais = "BR") {
+  return normalizarTelefoneSomenteDigitos(valor, pais);
 }
 
-export function abrirWhatsAppComMensagem(telefoneBruto, mensagem) {
-  const numero = normalizarTelefoneWhatsApp(telefoneBruto);
+export function abrirWhatsAppComMensagem(telefoneBruto, mensagem, pais = "BR") {
+  const numero = normalizarTelefoneWhatsApp(telefoneBruto, pais);
   if (!numero) return false;
   const texto = String(mensagem || "").trim();
   const url = texto
@@ -101,7 +198,9 @@ export function sincronizarServicosNaObservacao(conteudo, draft) {
     .map((p) => p.trim())
     .filter(Boolean);
 
-  const outrasPartes = partes.filter((p) => !p.startsWith("SERVIÇOS:"));
+  const outrasPartes = partes.filter(
+    (p) => !p.startsWith("SERVIÇOS:") && !p.startsWith("COR:"),
+  );
   const combinadas = blocoServicos
     ? [blocoServicos, ...outrasPartes]
     : outrasPartes;
@@ -113,16 +212,72 @@ export function sincronizarServicosNaObservacao(conteudo, draft) {
 
 export function bindCamposExtrasModal(
   conteudo,
-  {
-    getDraft,
-    getOsAtual,
-    calcularTotaisOS,
-    montarTextoCompartilhamento,
-    sincronizarCamposDoDom,
-    onTelefoneInvalido,
-  } = {},
+  { getDraft, sincronizarCamposDoDom, onTelefoneInvalido } = {},
 ) {
   if (!conteudo) return;
+
+  const inpTel = conteudo.querySelector("#editTelefone");
+  const btnPais = conteudo.querySelector("#btnPaisTelefone");
+  const spanDdi = conteudo.querySelector("#editTelefoneDdi");
+
+  const getPaisAtual = () => btnPais?.dataset.pais || "BR";
+
+  const atualizarPaisUI = (pais) => {
+    const ehPY = pais === "PY";
+    if (btnPais) {
+      btnPais.dataset.pais = ehPY ? "PY" : "BR";
+      btnPais.textContent = ehPY ? "🇵🇾" : "🇧🇷";
+      btnPais.style.background = ehPY
+        ? "rgba(217, 43, 43, 0.10)"
+        : "rgba(255, 196, 0, 0.14)";
+      btnPais.style.borderColor = ehPY
+        ? "rgba(217, 43, 43, 0.38)"
+        : "rgba(202, 138, 4, 0.38)";
+    }
+    if (spanDdi) {
+      spanDdi.textContent = ehPY ? "+595" : "+55";
+      spanDdi.style.color = ehPY ? "#b91c1c" : "#92400e";
+    }
+    if (inpTel) {
+      inpTel.placeholder = ehPY ? "(000) 000-000" : "(00) 00000-0000";
+    }
+  };
+  if (inpTel) {
+    const inicial = extrairPaisENumeroLocal(inpTel.value);
+    atualizarPaisUI(inicial.pais);
+    inpTel.value = inicial.localFormatado;
+
+    btnPais?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const proximo = getPaisAtual() === "BR" ? "PY" : "BR";
+      atualizarPaisUI(proximo);
+      inpTel.value = formatarTelefoneLocal(inpTel.value, proximo);
+      inpTel.focus();
+    });
+
+    inpTel.addEventListener("input", (e) => {
+      let rawValue = e.target.value.replace(/\D/g, "");
+      let pais = getPaisAtual();
+
+      if (
+        rawValue.length > 0 &&
+        rawValue.length <= 9 &&
+        (rawValue.startsWith("9") || rawValue.startsWith("0"))
+      ) {
+        if (pais !== "PY" && rawValue.length === 9) {
+          pais = "PY";
+          atualizarPaisUI("PY");
+        }
+      } else if (rawValue.length > 9) {
+        if (pais !== "BR") {
+          pais = "BR";
+          atualizarPaisUI("BR");
+        }
+      }
+
+      e.target.value = formatarTelefoneLocal(rawValue, pais);
+    });
+  }
 
   conteudo.querySelectorAll(".btn-copiar-campo").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -138,13 +293,12 @@ export function bindCamposExtrasModal(
     ?.addEventListener("click", async (e) => {
       e.stopPropagation();
       const draft = typeof getDraft === "function" ? getDraft() : null;
-      const osAtual = typeof getOsAtual === "function" ? getOsAtual() : null;
       if (!draft) return;
 
-      const telAtual =
-        conteudo.querySelector("#editTelefone")?.value ?? draft.telefone;
+      const paisAtual = getPaisAtual();
+      const telAtual = inpTel?.value ?? draft.telefone;
 
-      if (!normalizarTelefoneWhatsApp(telAtual)) {
+      if (!normalizarTelefoneWhatsApp(telAtual, paisAtual)) {
         if (typeof onTelefoneInvalido === "function") {
           await onTelefoneInvalido();
         }
@@ -154,21 +308,15 @@ export function bindCamposExtrasModal(
       if (typeof sincronizarCamposDoDom === "function") {
         sincronizarCamposDoDom(conteudo);
       }
-      sincronizarServicosNaObservacao(conteudo, draft);
 
-      const tot =
-        typeof calcularTotaisOS === "function"
-          ? calcularTotaisOS(draft.itens_servicos, draft.desconto)
-          : null;
-      const msg =
-        typeof montarTextoCompartilhamento === "function"
-          ? montarTextoCompartilhamento(osAtual, draft, tot)
-          : "";
-
-      abrirWhatsAppComMensagem(telAtual, msg);
+      const nomeAtual =
+        conteudo.querySelector("#editNome")?.value ?? draft.nome;
+      const msg = montarMensagemWhatsAppEmpresarial(nomeAtual);
+      abrirWhatsAppComMensagem(telAtual, msg, paisAtual);
     });
 
   forcarCapsLockAoDigitar(conteudo.querySelector("#editNome"));
+  forcarCapsLockAoDigitar(conteudo.querySelector("#editCor"));
   forcarCapsLockAoDigitar(conteudo.querySelector("#editObservacao"));
   conteudo.querySelectorAll(".item-servico").forEach((inp) => {
     forcarCapsLockAoDigitar(inp);
