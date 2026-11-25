@@ -93,7 +93,7 @@ export function criarGerenciadorSync({
       ...os,
       itens_servicos: Array.isArray(os.itens_servicos) ? os.itens_servicos : [],
       fotos_locais: fotosLocais,
-      fotos_urls: fotosLocais.map((x) => x.src).filter(Boolean),
+      fotos_urls: fotosLocais.map((x) => x.urlRemota).filter(Boolean),
       servico_finalizado: Boolean(os.servico_finalizado),
       status: os.status || (os.servico_finalizado ? "Concluído" : "Pendente"),
     };

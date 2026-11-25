@@ -86,7 +86,6 @@ export function montarPatchOS(formState = {}) {
     registro_os: registroOsLimpo || null,
     numero_venda: numeroVendaLimpo || null,
     status: statusLimpo,
-    servico_finalizado: finalizado,
     observacao: String(formState.observacao || "").trim(),
     observacao_manual: String(formState.observacao_manual || "").trim(),
     servico: resumoServicos || String(formState.servico || "").trim(),

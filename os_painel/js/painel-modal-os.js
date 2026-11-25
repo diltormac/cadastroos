@@ -163,7 +163,7 @@ function montarFotosExistentesIniciais(os) {
   if (locais.length > 0) {
     return locais.map((f, idx) => ({
       tipo: "existente",
-      src: f.src,
+      src: f.urlOriginal || f.url || f.src,
       urlOriginal: f.urlOriginal || f.url || os?.fotos_urls?.[idx] || "",
       disponivelOffline: Boolean(f.disponivelOffline),
     }));
@@ -562,9 +562,26 @@ export function criarModalDetalhesOS({
     draft.registro_os = getVal("editRegistroOs").trim().toUpperCase();
     draft.numero_venda = getVal("editNumeroVenda").trim().toUpperCase();
     draft.status = calcularStatusPorDocumentos(draft);
-    draft.servico_finalizado = draft.status === "Concluído";
-    draft.observacao = getVal("editObservacao").toUpperCase();
-    draft.observacao_manual = "";
+    const textoCompleto = getVal("editObservacao").toUpperCase();
+
+    // O sistema usa " | " para separar. Se tiver "SERVIÇOS:", sabemos que é a parte automática.
+    let textoManual = textoCompleto;
+    if (textoCompleto.includes("SERVIÇOS:")) {
+      const partes = textoCompleto.split(" | ");
+      // Pega tudo o que vem depois de "SERVIÇOS: ..." e ignora as partes de PLACA e COR
+      textoManual = partes
+        .filter(
+          (p) =>
+            !p.includes("SERVIÇOS:") &&
+            !p.includes("PLACA:") &&
+            !p.includes("COR:"),
+        )
+        .join(" | ")
+        .trim();
+    }
+
+    draft.observacao = textoCompleto;
+    draft.observacao_manual = textoManual;
     draft.desconto = Number(getVal("editDesconto") || 0);
     draft.novas_fotos_arquivos = (draft.novasFotos || []).map(
       (nf) => nf.fileOriginal,
@@ -756,7 +773,7 @@ export function criarModalDetalhesOS({
             <span>Observação</span>
             ${renderBotaoCopiar("editObservacao")}
           </label>
-          <input id="editObservacao" type="text" style="${inputSoftStyle};text-transform:uppercase" value="${esc(draft.observacao)}" ${podeEditar ? "" : "disabled"} />
+         <textarea id="editObservacao" rows="3" style="${inputSoftStyle};text-transform:uppercase;resize:vertical;font-family:inherit;line-height:1.4" ${podeEditar ? "" : "disabled"}>${esc(draft.observacao)}</textarea>
         </div>
       </div>
 
@@ -1254,17 +1271,23 @@ export function criarModalDetalhesOS({
     limparPreviewsNovasFotos(draft);
     osAtual = o;
 
-    const obsInicial = [
-      ...new Set(
-        [o.observacao, o.observacao_manual]
-          .map((v) =>
-            String(v || "")
-              .trim()
-              .toUpperCase(),
-          )
-          .filter(Boolean),
-      ),
-    ].join(" | ");
+    // Pega o que já está no banco e garante que não vai duplicar o texto manual
+    const obsAuto = String(o.observacao || "")
+      .trim()
+      .toUpperCase();
+    const obsManual = String(o.observacao_manual || "")
+      .trim()
+      .toUpperCase();
+
+    // Se o banco já tem o texto manual dentro da observacao antiga, limpamos para não repetir
+    let obsBase = obsAuto;
+    if (obsManual && obsAuto.includes(obsManual)) {
+      obsBase = obsAuto
+        .replace(obsManual, "")
+        .replace(/\|\s*$/, "")
+        .trim();
+    }
+    const obsInicial = obsBase ? `${obsBase} | ${obsManual}` : obsManual;
 
     const baseDraft = {
       nome: o.nome || "",
@@ -1279,7 +1302,7 @@ export function criarModalDetalhesOS({
       numero_venda: o.numero_venda || "",
       status: o.status === "Cancelado" ? "Cancelado" : "",
       observacao: obsInicial,
-      observacao_manual: "",
+      observacao_manual: o.observacao_manual || "",
       servico: o.servico || "",
       desconto: Number(o.desconto || 0),
       itens_servicos: Array.isArray(o.itens_servicos)

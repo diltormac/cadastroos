@@ -204,17 +204,23 @@ export function criarGaleriaOffline({
           .filter(Boolean)
           .join(" · ");
 
+        const temLink = legenda && typeof onAbrirOS === "function";
+        const legendaHtml = legenda
+          ? `<span class="galeria-offline-legenda mono" style="cursor:${temLink ? "pointer" : "default"};display:inline-block; margin-top:4px;" data-idx="${idx}" data-os-id="${esc(item.osId)}">${legenda} ${temLink ? "🔗" : ""}</span>`
+          : "";
+
         return `
           <div class="galeria-offline-item" data-idx="${idx}" title="${legenda}">
             <button type="button" class="galeria-offline-foto-btn" data-idx="${idx}" data-os-id="${esc(item.osId)}" style="all:unset;cursor:pointer;display:block;width:100%">
               <img src="${esc(item.src)}" alt="Foto ${idx + 1}" loading="lazy" />
             </button>
-            ${legenda ? `<span class="galeria-offline-legenda mono">${legenda}</span>` : ""}
+            ${legendaHtml}
           </div>
         `;
       })
       .join("");
 
+    // Evento de clique na FOTO
     grid.querySelectorAll(".galeria-offline-foto-btn").forEach((btn) => {
       const img = btn.querySelector("img");
       img?.addEventListener("error", () => {
@@ -228,17 +234,41 @@ export function criarGaleriaOffline({
         const idx = Number(btn.dataset.idx);
         const item = fotosAtuais[Number.isNaN(idx) ? 0 : idx];
         const osId = item?.osId || btn.dataset.osId || "";
+        let abriuOS = false;
 
+        // Tenta abrir a OS
         if (osId && typeof onAbrirOS === "function") {
-          await onAbrirOS(osId);
-          return;
+          fechar(); // Fecha a galeria
+          abriuOS = await onAbrirOS(osId);
         }
 
-        if (typeof onAbrirLightbox === "function") {
+        // Se não conseguiu abrir a OS (ou se a foto não tem OS), abre o lightbox!
+        if (!abriuOS && typeof onAbrirLightbox === "function") {
+          // Se a galeria foi fechada, reabre para o lightbox ter contexto
+          if (osId) renderizarGrade(fotosAtuais);
+
           onAbrirLightbox(fotosAtuais, Number.isNaN(idx) ? 0 : idx);
         }
       });
     });
+
+    // Evento de clique na LEGENDA
+    if (typeof onAbrirOS === "function") {
+      grid.querySelectorAll(".galeria-offline-legenda").forEach((span) => {
+        span.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const idx = Number(span.dataset.idx);
+          const item = fotosAtuais[Number.isNaN(idx) ? 0 : idx];
+          const osId = item?.osId || span.dataset.osId || "";
+
+          if (osId) {
+            fechar();
+            const abriu = await onAbrirOS(osId);
+            if (!abriu) renderizarGrade(fotosAtuais); // Se não achou, mantém a galeria
+          }
+        });
+      });
+    }
 
     overlay.classList.add("aberto");
   }
@@ -259,10 +289,10 @@ export function criarGaleriaOffline({
           src: item.dataUrl,
           disponivelOffline: true,
           urlRemota: item.url || "",
-          osId:
-            item.os ||
-            (typeof item.id === "string" ? item.id.split("_")[0] : "") ||
-            "",
+          // AQUI ESTÁ O AJUSTE DO ID (LIMPA O ID DEIXANDO SÓ NÚMEROS)
+          osId: String(item.os || item.id || "")
+            .replace(/[^0-9]/g, "")
+            .trim(),
           cliente: item.nome || "CONSUMIDOR",
         });
       }

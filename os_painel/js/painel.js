@@ -12,6 +12,7 @@ import { criarGaleriaOffline } from "./painel-galeria-offline.js";
 import { criarGerenciadorSync } from "./painel-sync.js";
 import { criarGerenciadorBackup } from "./painel-backup.js";
 import { criarGerenciadorCards } from "./painel-cards.js";
+import { osCache } from "./os-cache.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -77,6 +78,34 @@ const lightbox = criarLightboxPainel();
 galeriaOffline = criarGaleriaOffline({
   onAbrirLightbox: (fotos, idx) => lightbox.abrir(fotos, idx),
   onAviso: (titulo, msg, tipo) => uiAlerta(titulo, msg, tipo),
+
+  onAbrirOS: async (idOs) => {
+    if (!idOs) return false;
+
+    // Normaliza o ID para busca (apenas string)
+    const buscaId = String(idOs).trim();
+
+    // 1. Tenta achar a OS na lista que já está na memória
+    let osEncontrada = state.dados.find(
+      (o) => String(o.id) === buscaId || String(o.uuid_local) === buscaId,
+    );
+
+    // 2. Se não achar, busca direto do banco local (IndexedDB)
+    if (!osEncontrada) {
+      const locais = await osCache.listarOffline();
+      osEncontrada = locais.find(
+        (o) => String(o.id) === buscaId || String(o.uuid_local) === buscaId,
+      );
+    }
+
+    if (osEncontrada) {
+      // Usa um pequeno atraso para garantir que a galeria feche suavemente
+      setTimeout(() => modalOS.abrir(osEncontrada), 100);
+      return true; // Avisa a galeria que abriu com sucesso
+    }
+
+    return false; // Avisa a galeria que falhou (ela abrirá o lightbox)
+  },
 });
 
 const modalOS = criarModalDetalhesOS({
