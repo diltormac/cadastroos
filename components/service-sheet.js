@@ -105,7 +105,6 @@ import { supabaseClient } from "../js/supabase.js";
     .service-empty { text-align: center; color: #9aa9c2; font-size: 14px; padding: 20px 0; }
     .service-sheet-footer button { width: 100%; height: 56px; border-radius: 14px; border: 0; background: #ffc400; color: #000; font-weight: bold; font-size: 16px; cursor: pointer; }
 
-    /* Cor da roda REFORMA — destaque obrigatório */
     .reforma-cor-wrapper {
       display: flex; align-items: center; gap: 10px;
       background: rgba(255, 196, 0, 0.06);
@@ -176,11 +175,17 @@ import { supabaseClient } from "../js/supabase.js";
   let renderFn = null;
   let mainLabelRef = null;
   let mainBtnRef = null;
+  let setorAtivo = null; // null ou "TODOS" = sem filtro
 
   function normalizarNome(nome) {
     return String(nome || "")
       .trim()
       .toUpperCase();
+  }
+
+  function filtrarPorSetor(lista) {
+    if (!setorAtivo || setorAtivo === "TODOS") return lista;
+    return lista.filter((item) => normalizarNome(item.setor) === setorAtivo);
   }
 
   function isReforma(nome) {
@@ -207,7 +212,6 @@ import { supabaseClient } from "../js/supabase.js";
     }
   }
 
-  // Menor número livre de REFORMA a partir de 5898 (coluna numero_os)
   async function buscarMenorNumeroLivreReforma() {
     if (!navigator.onLine) return null;
 
@@ -240,7 +244,6 @@ import { supabaseClient } from "../js/supabase.js";
     }
   }
 
-  // Menor número livre compartilhado de CONSERTO e SOLDA a partir de 6189 (coluna numero_os_conserto)
   async function buscarMenorNumeroLivreConsertoSolda() {
     if (!navigator.onLine) return null;
 
@@ -282,7 +285,7 @@ import { supabaseClient } from "../js/supabase.js";
   }
 
   window.ServiceSheet = {
-    init: function (containerId, triggerBtnId, labelId) {
+    init: function (containerId, triggerBtnId, labelId, options = {}) {
       const container = document.getElementById(containerId);
       const mainBtn = document.getElementById(triggerBtnId);
       const mainLabel = document.getElementById(labelId);
@@ -290,6 +293,7 @@ import { supabaseClient } from "../js/supabase.js";
       if (!container) return;
       mainLabelRef = mainLabel;
       mainBtnRef = mainBtn;
+      setorAtivo = options.setor ? normalizarNome(options.setor) : null;
 
       let viewportMeta = document.querySelector('meta[name="viewport"]');
       if (
@@ -299,12 +303,17 @@ import { supabaseClient } from "../js/supabase.js";
         viewportMeta.content += ", interactive-widget=resizes-content";
       }
 
+      const tituloModal =
+        setorAtivo && setorAtivo !== "TODOS"
+          ? `Serviços • ${setorAtivo}`
+          : "Selecionar Serviços";
+
       container.innerHTML = `
         <div class="service-sheet-overlay" id="sheetOverlay">
           <div class="service-sheet-content">
             <div class="service-sheet-handle"></div>
             <div class="service-sheet-header">
-              <h3>Selecionar Serviços</h3>
+              <h3>${tituloModal}</h3>
               <button class="btn-close-sheet" id="closeSheetBtn">×</button>
             </div>
 
@@ -351,13 +360,15 @@ import { supabaseClient } from "../js/supabase.js";
       };
 
       const renderCatalogo = (dbServices) => {
-        if (dbServices.length === 0) {
+        const filtrados = filtrarPorSetor(dbServices);
+
+        if (filtrados.length === 0) {
           catalog.innerHTML =
-            '<span style="color: #8797b3; font-size: 12px; grid-column: 1 / -1; text-align: center;">Nenhum serviço no catálogo.</span>';
+            '<span style="color: #8797b3; font-size: 12px; grid-column: 1 / -1; text-align: center;">Nenhum serviço para este setor.</span>';
           return;
         }
 
-        catalog.innerHTML = dbServices
+        catalog.innerHTML = filtrados
           .map((s) => {
             const nomeUpper = normalizarNome(s.nome);
             const selecionado = services.some(
@@ -383,6 +394,7 @@ import { supabaseClient } from "../js/supabase.js";
                 nome,
                 valor,
                 qtd: 1,
+                setor: setorAtivo,
                 cor: isReforma(nome) ? "" : null,
                 numero_os: isReforma(nome) ? numero : null,
                 numero_os_conserto: isConsertoOuSolda(nome) ? numero : null,
@@ -404,16 +416,10 @@ import { supabaseClient } from "../js/supabase.js";
         }
 
         sincronizarServicos().then(async (sincronizou) => {
-          if (!sincronizou) {
-            const cache = await db.catalogo_servicos.toArray();
-            if (cache.length === 0) {
-              catalog.innerHTML =
-                '<span style="color: #8797b3; font-size: 12px; grid-column: 1 / -1; text-align: center;">Nenhum serviço no catálogo.</span>';
-            }
-            return;
-          }
-          const atualizados = await db.catalogo_servicos.toArray();
-          renderCatalogo(atualizados);
+          const base = sincronizou
+            ? await db.catalogo_servicos.toArray()
+            : locais;
+          renderCatalogo(base);
         });
       };
 
@@ -576,6 +582,7 @@ import { supabaseClient } from "../js/supabase.js";
           nome: val,
           valor: 0,
           qtd: 1,
+          setor: setorAtivo,
           cor: isReforma(val) ? "" : null,
           numero_os: isReforma(val) ? numero : null,
           numero_os_conserto: isConsertoOuSolda(val) ? numero : null,
@@ -609,12 +616,10 @@ import { supabaseClient } from "../js/supabase.js";
       };
 
       const close = () => {
-        // Valida cor obrigatória em toda REFORMA
         const reformasSemCor = services.filter(
           (s) => isReforma(s.nome) && !(s.cor && s.cor.trim()),
         );
         if (reformasSemCor.length > 0) {
-          // Marca os wrappers em erro
           list.querySelectorAll(".reforma-cor-wrapper").forEach((wrapper) => {
             const idx = Number(wrapper.dataset.corIndex);
             const item = services[idx];
@@ -622,7 +627,6 @@ import { supabaseClient } from "../js/supabase.js";
               wrapper.classList.add("erro");
             }
           });
-          // Scroll até o primeiro erro e foca
           const primeiroErro = list.querySelector(".reforma-cor-wrapper.erro");
           if (primeiroErro) {
             primeiroErro.scrollIntoView({
@@ -632,7 +636,6 @@ import { supabaseClient } from "../js/supabase.js";
             const inputErro = primeiroErro.querySelector("input");
             if (inputErro) setTimeout(() => inputErro.focus(), 300);
           }
-          // Aviso
           if (window.CustomAlert) {
             window.CustomAlert.show(
               `Informe a cor da roda em ${reformasSemCor.length === 1 ? "1 serviço REFORMA" : reformasSemCor.length + " serviços REFORMA"}.`,

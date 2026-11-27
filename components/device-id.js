@@ -1,5 +1,16 @@
 (function () {
   const STORAGE_KEY = "@osfacil_aparelho";
+  const SECTOR_KEY = "@osfacil_setor";
+  const SETORES_PADRAO = [
+    "ESCAPAMENTO",
+    "MECANICA",
+    "ALINHAMENTO",
+    "RODAS",
+    "PNEUS",
+    "PECAS",
+    "GERAL",
+    "TODOS",
+  ];
 
   const style = document.createElement("style");
   style.textContent = `
@@ -42,7 +53,18 @@
       font-size: 13px; color: #c4cee0; text-align: center; line-height: 1.4;
     }
 
-    .device-modal-input {
+    .device-modal-label {
+      display: block;
+      margin: 12px 0 6px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      color: #9aa9c2;
+      text-transform: uppercase;
+    }
+
+    .device-modal-input,
+    .device-modal-select {
       width: 100%; height: 48px;
       border-radius: 12px;
       border: 1.5px solid #34435f;
@@ -50,12 +72,13 @@
       color: #f4f7fc;
       padding: 0 14px;
       font-size: 15px; font-weight: 700;
-      text-align: center;
       text-transform: uppercase;
       outline: none;
       box-sizing: border-box;
     }
-    .device-modal-input:focus { border-color: #ffc400; }
+    .device-modal-input { text-align: center; }
+    .device-modal-input:focus,
+    .device-modal-select:focus { border-color: #ffc400; }
 
     .device-modal-erro {
       margin-top: 8px;
@@ -87,6 +110,12 @@
     return val.trim().toUpperCase();
   }
 
+  function lerSetorSalvo() {
+    const val = localStorage.getItem(SECTOR_KEY);
+    if (!val || val === "undefined" || val === "null") return "";
+    return val.trim().toUpperCase();
+  }
+
   let abrirFn = null;
 
   window.DeviceId = {
@@ -94,44 +123,63 @@
       return lerNomeSalvo().length >= 2;
     },
 
+    hasSector: function () {
+      return lerSetorSalvo().length >= 2;
+    },
+
     get: function () {
       return lerNomeSalvo();
     },
 
-    require: function () {
-      const atual = lerNomeSalvo();
-      if (atual.length >= 2) return atual;
-      if (typeof abrirFn === "function") abrirFn(false);
-      return "";
+    getSetor: function () {
+      return lerSetorSalvo();
     },
 
-    init: function ({ displayId, triggerId } = {}) {
+    require: function () {
+      const atual = lerNomeSalvo();
+      const setor = lerSetorSalvo();
+      if (atual.length >= 2 && setor.length >= 2) return atual;
+      if (typeof abrirFn === "function") abrirFn(false);
+      return atual.length >= 2 ? atual : "";
+    },
+
+    init: function ({ displayId, sectorDisplayId, triggerId } = {}) {
       let overlay = document.getElementById("device-id-overlay");
 
       if (!overlay) {
+        const opcoesHtml = SETORES_PADRAO.map(
+          (s) => `<option value="${s}">${s}</option>`,
+        ).join("");
+
         overlay = document.createElement("div");
         overlay.id = "device-id-overlay";
         overlay.className = "device-modal-overlay";
         overlay.innerHTML = `
           <div class="device-modal-box">
             <div class="device-modal-header">
-              <span>Identificação Obrigatória do Aparelho</span>
+              <span>Configuração Inicial do Aparelho</span>
               <button type="button" class="device-modal-close" id="device-id-close" aria-label="Fechar">×</button>
             </div>
             <div class="device-modal-body">
               <p class="device-modal-desc">
-                Para registrar ordens de serviço, informe o nome deste aparelho (Ex: TABLET RECEPÇÃO, CELULAR BALCÃO).
+                Informe o nome deste aparelho e o setor de trabalho para liberar os serviços correspondentes.
               </p>
+              <label class="device-modal-label" for="device-id-input">Aparelho / Funcionário</label>
               <input
                 type="text"
                 id="device-id-input"
                 class="device-modal-input"
-                placeholder="Digite o nome do aparelho"
+                placeholder="Ex: CELULAR ALEX, BALCÃO"
                 maxlength="40"
                 autocomplete="off"
               />
+              <label class="device-modal-label" for="device-sector-select">Setor</label>
+              <select id="device-sector-select" class="device-modal-select">
+                <option value="">Selecione o setor...</option>
+                ${opcoesHtml}
+              </select>
               <div class="device-modal-erro" id="device-id-erro">
-                Digite um nome com pelo menos 2 caracteres.
+                Preencha o nome do aparelho (mín. 2 caracteres) e selecione um setor.
               </div>
             </div>
             <div class="device-modal-footer">
@@ -145,19 +193,25 @@
       }
 
       const input = document.getElementById("device-id-input");
+      const selectSetor = document.getElementById("device-sector-select");
       const erro = document.getElementById("device-id-erro");
       const btnSave = document.getElementById("device-id-save");
       const btnClose = document.getElementById("device-id-close");
       const displayEl = displayId ? document.getElementById(displayId) : null;
+      const sectorDisplayEl = sectorDisplayId
+        ? document.getElementById(sectorDisplayId)
+        : null;
       const triggerEl = triggerId ? document.getElementById(triggerId) : null;
 
-      const atualizarDisplay = (nome) => {
+      const atualizarDisplay = (nome, setor) => {
         if (displayEl) displayEl.textContent = nome || "Definir aparelho";
+        if (sectorDisplayEl) sectorDisplayEl.textContent = setor || "Sem setor";
       };
 
       const abrir = (permiteFechar = false) => {
         erro.style.display = "none";
         input.value = lerNomeSalvo();
+        selectSetor.value = lerSetorSalvo();
         btnClose.style.display = permiteFechar ? "block" : "none";
         overlay.classList.add("open");
         setTimeout(() => input.focus(), 100);
@@ -166,10 +220,8 @@
       abrirFn = abrir;
 
       const fechar = () => {
-        // Só permite fechar se já existir um nome salvo
-        if (!lerNomeSalvo()) {
+        if (!lerNomeSalvo() || !lerSetorSalvo()) {
           erro.style.display = "block";
-          input.focus();
           return;
         }
         overlay.classList.remove("open");
@@ -177,21 +229,33 @@
 
       const salvar = () => {
         const valor = input.value.trim().toUpperCase();
-        if (valor.length < 2) {
+        const setorEscolhido = selectSetor.value.trim().toUpperCase();
+
+        if (valor.length < 2 || !setorEscolhido) {
           erro.style.display = "block";
-          input.focus();
+          if (valor.length < 2) input.focus();
+          else selectSetor.focus();
           return;
         }
+
         localStorage.setItem(STORAGE_KEY, valor);
-        atualizarDisplay(valor);
+        localStorage.setItem(SECTOR_KEY, setorEscolhido);
+        atualizarDisplay(valor, setorEscolhido);
         overlay.classList.remove("open");
+
         document.dispatchEvent(
           new CustomEvent("device-id-change", { detail: valor }),
+        );
+        document.dispatchEvent(
+          new CustomEvent("device-setor-change", { detail: setorEscolhido }),
         );
       };
 
       btnSave.onclick = salvar;
       btnClose.onclick = fechar;
+      selectSetor.onchange = () => {
+        erro.style.display = "none";
+      };
       input.onkeydown = (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -205,11 +269,12 @@
       }
 
       const atual = lerNomeSalvo();
-      if (!atual || atual.length < 2) {
-        atualizarDisplay("");
+      const setorAtual = lerSetorSalvo();
+      if (!atual || atual.length < 2 || !setorAtual) {
+        atualizarDisplay(atual, setorAtual);
         abrir(false);
       } else {
-        atualizarDisplay(atual);
+        atualizarDisplay(atual, setorAtual);
       }
     },
   };

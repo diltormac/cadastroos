@@ -259,11 +259,26 @@
       CustomerInfo.init("customer-info-container");
       MorphInputCPF.init("cpf-slot");
       MorphInputPlaca.init("placa-slot");
+      DeviceId.init();
+
+      const setorInicial = DeviceId.getSetor() || "ESCAPAMENTO";
+
       ServiceSheet.init(
         "sheet-container",
         "btn-abrir-servico",
         "servico-label",
+        { setor: setorInicial },
       );
+
+      document.addEventListener("device-setor-change", (e) => {
+        ServiceSheet.init(
+          "sheet-container",
+          "btn-abrir-servico",
+          "servico-label",
+          { setor: e.detail },
+        );
+      });
+
       ImageUpload.init("upload-container");
 
       const dados = {
@@ -300,6 +315,10 @@
         .getElementById("osForm")
         .addEventListener("submit", async (e) => {
           e.preventDefault();
+
+          if (!DeviceId.require()) {
+            return;
+          }
 
           if (dados.servicos.length === 0) {
             window.CustomAlert.show(
@@ -364,6 +383,7 @@
               servicos: dados.servicos,
               fotos: dados.fotos,
               aparelho: DeviceId.get(),
+              setor: DeviceId.getSetor(),
             });
 
             if (navigator.onLine) osSync.enviarPendentes();

@@ -60,32 +60,82 @@ export function isConsertoOuSolda(nome) {
   return n.includes("CONSERTO") || n.includes("SOLDA");
 }
 
-let catalogoCache = [];
+const catalogoCachePorChave = new Map();
 
-export async function carregarCatalogoServicos() {
-  if (catalogoCache.length > 0 && !navigator.onLine) {
-    return catalogoCache;
+function normalizarSetor(setor) {
+  return String(setor || "")
+    .trim()
+    .toUpperCase();
+}
+
+function obterSetorAtivo(setorInformado = "") {
+  const explicito = normalizarSetor(setorInformado);
+  if (explicito) return explicito;
+
+  if (typeof window !== "undefined" && window.DeviceId?.getSetor) {
+    return normalizarSetor(window.DeviceId.getSetor());
+  }
+  return "";
+}
+
+function correspondeAoSetor(item, setorAlvo) {
+  if (!setorAlvo || setorAlvo === "TODOS") return true;
+
+  const setorItem = normalizarSetor(item.setor ?? item.categoria ?? "");
+  if (setorItem) {
+    return setorItem === setorAlvo || setorItem.includes(setorAlvo);
+  }
+
+  // Fallback caso a tabela catalogo_servicos não tenha coluna de setor
+  const termos = setorAlvo.split(/\s+/).filter(Boolean);
+  const nome = normalizarNomeServico(item.nome);
+  return termos.some((termo) => nome.includes(termo));
+}
+
+export function limparCacheCatalogoServicos() {
+  catalogoCachePorChave.clear();
+}
+
+export async function carregarCatalogoServicos(setor = "") {
+  const setorAtivo = obterSetorAtivo(setor);
+  const chave = setorAtivo || "TODOS";
+
+  if (!navigator.onLine && catalogoCachePorChave.has(chave)) {
+    return catalogoCachePorChave.get(chave);
   }
 
   if (navigator.onLine) {
     try {
       const { data, error } = await supabaseClient
         .from("catalogo_servicos")
-        .select("id, nome, valor")
+        .select("*")
         .order("id", { ascending: true });
 
       if (!error && Array.isArray(data)) {
-        catalogoCache = data.map((s) => ({
-          nome: normalizarNomeServico(s.nome),
-          valor: Number(s.valor || 0),
-        }));
+        const filtrados = data
+          .filter((s) => correspondeAoSetor(s, setorAtivo))
+          .map((s) => ({
+            id: s.id,
+            nome: normalizarNomeServico(s.nome),
+            valor: Number(s.valor || 0),
+            setor: normalizarSetor(s.setor ?? s.categoria ?? ""),
+          }));
+
+        catalogoCachePorChave.set(chave, filtrados);
+        return filtrados;
       }
     } catch (err) {
       console.warn("Falha ao buscar catalogo_servicos:", err);
     }
   }
 
-  return catalogoCache;
+  return catalogoCachePorChave.get(chave) || [];
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("device-setor-change", () => {
+    limparCacheCatalogoServicos();
+  });
 }
 
 export async function buscarMenorNumeroLivreReforma() {

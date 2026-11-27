@@ -150,6 +150,11 @@ function montarTextoCompartilhamento(os, atualDraft) {
     linhas.push(`Números: ${numeros.join(" | ")}`);
   }
 
+  const formaPgto = String(
+    atualDraft?.forma_pagamento ?? os?.forma_pagamento ?? "",
+  ).trim();
+  if (formaPgto) linhas.push(`Pagamento: ${formaPgto}`);
+
   const obs = String(atualDraft?.observacao ?? os?.observacao ?? "").trim();
   if (obs) linhas.push(`Observações: ${obs}`);
 
@@ -356,6 +361,15 @@ async function abrirModalRelatorioEstiloCorporativo(os, atualDraft, totais) {
           </div>
 
           ${
+            atualDraft?.forma_pagamento
+              ? `<div style="margin-bottom:16px;page-break-inside:avoid">
+                  <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Forma de Pagamento</p>
+                  <div style="font-size:12.5px;color:#0f172a;font-weight:700;background:#f8fafc;padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1">${esc(atualDraft.forma_pagamento)}</div>
+                </div>`
+              : ""
+          }
+
+          ${
             obsFinal
               ? `<div style="margin-bottom:22px;page-break-inside:avoid">
                   <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#64748b">Observações Técnicas</p>
@@ -478,6 +492,7 @@ export function criarModalDetalhesOS({
   overlayId = "modalOverlay",
   conteudoId = "modalConteudo",
   maxFotos = 6,
+  setorCatalogo = "",
   onAbrirFoto,
   onAtualizarOS,
   onExcluirOS,
@@ -561,14 +576,13 @@ export function criarModalDetalhesOS({
     draft.numero_os_conserto = getVal("editNumeroOsConserto").trim();
     draft.registro_os = getVal("editRegistroOs").trim().toUpperCase();
     draft.numero_venda = getVal("editNumeroVenda").trim().toUpperCase();
+    draft.forma_pagamento = getVal("editFormaPagamento").trim().toUpperCase();
     draft.status = calcularStatusPorDocumentos(draft);
     const textoCompleto = getVal("editObservacao").toUpperCase();
 
-    // O sistema usa " | " para separar. Se tiver "SERVIÇOS:", sabemos que é a parte automática.
     let textoManual = textoCompleto;
     if (textoCompleto.includes("SERVIÇOS:")) {
       const partes = textoCompleto.split(" | ");
-      // Pega tudo o que vem depois de "SERVIÇOS: ..." e ignora as partes de PLACA e COR
       textoManual = partes
         .filter(
           (p) =>
@@ -714,6 +728,14 @@ export function criarModalDetalhesOS({
 
     conteudo.innerHTML = `
       <datalist id="datalistCatalogoServicos">${optionsCatalogo}</datalist>
+      <datalist id="datalistFormasPagamento">
+        <option value="PIX"></option>
+        <option value="DINHEIRO"></option>
+        <option value="CARTÃO CRÉDITO"></option>
+        <option value="CARTÃO DÉBITO"></option>
+        <option value="BOLETO"></option>
+        <option value="A PRAZO"></option>
+      </datalist>
 
       <div class="modal-top">
         <div>
@@ -788,16 +810,20 @@ export function criarModalDetalhesOS({
             <label for="editNumeroOsConserto">Nº OS Conserto</label>
             <input id="editNumeroOsConserto" type="text" class="mono" style="${inputSoftStyle}" value="${esc(draft.numero_os_conserto)}" placeholder="Ex: 6201" ${podeEditar ? "" : "disabled"} />
           </div>
+          <div class="prop-item">
+            <label for="editFormaPagamento">Forma de pagamento</label>
+            <input id="editFormaPagamento" type="text" list="datalistFormasPagamento" style="${inputSoftStyle};text-transform:uppercase" value="${esc(draft.forma_pagamento)}" placeholder="PIX, DINHEIRO, CARTÃO..." ${podeEditar ? "" : "disabled"} />
+          </div>
         </div>
 
         <div style="border-top:1px dashed #d8dee6;padding-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
           <div class="prop-item">
-            <label for="editRegistroOs">Registro OS <span style="font-weight:400;color:#7a8494">(Em andamento)</span></label>
-            <input id="editRegistroOs" type="text" class="mono" style="${inputSoftStyle}" value="${esc(draft.registro_os)}" placeholder="Ex: 0000" ${podeEditar ? "" : "disabled"} />
+            <label for="editRegistroOs" style="color:#1e40af;font-weight:600">Registro OS <span style="font-weight:400;color:#64748b">(Em andamento)</span></label>
+            <input id="editRegistroOs" type="text" class="mono" style="${inputSoftStyle};border-color:#93c5fd;background:#f8fbff" value="${esc(draft.registro_os)}" placeholder="Ex: 0000" ${podeEditar ? "" : "disabled"} />
           </div>
           <div class="prop-item">
-            <label for="editNumeroVenda">Nº Venda <span style="font-weight:400;color:#7a8494">(Concluído)</span></label>
-            <input id="editNumeroVenda" type="text" class="mono" style="${inputSoftStyle}" value="${esc(draft.numero_venda)}" placeholder="Ex: 000000" ${podeEditar ? "" : "disabled"} />
+            <label for="editNumeroVenda" style="color:#065f46;font-weight:600">Nº Venda <span style="font-weight:400;color:#64748b">(Concluído)</span></label>
+            <input id="editNumeroVenda" type="text" class="mono" style="${inputSoftStyle};border-color:#6ee7b7;background:#f4fbf8" value="${esc(draft.numero_venda)}" placeholder="Ex: 000000" ${podeEditar ? "" : "disabled"} />
           </div>
           <div class="prop-item">
             <label for="editStatus">Status</label>
@@ -806,6 +832,10 @@ export function criarModalDetalhesOS({
               <button type="button" id="btnToggleCancelar" style="height:36px;padding:0 12px;border-radius:8px;border:1px solid #d0d5db;background:#ffffff;color:#1a1f26;font-size:12px;font-weight:600;line-height:1;white-space:nowrap;cursor:pointer;box-sizing:border-box;flex-shrink:0" ${podeEditar ? "" : "disabled"}>${estaCancelada ? "Reativar" : "Cancelar"}</button>
             </div>
           </div>
+        </div>
+
+        <div id="lembreteNumeroVenda" style="display:none;padding:9px 12px;border-radius:8px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;line-height:1.4">
+          <strong>Lembrete:</strong> ao preencher <strong>Nº Venda</strong>, o status muda para <strong>Concluído</strong>. Confirme se o cliente já pagou/retirou e se a <strong>Forma de pagamento</strong> e o <strong>Valor total</strong> estão corretos.
         </div>
       </div>
 
@@ -1092,11 +1122,46 @@ export function criarModalDetalhesOS({
       }
     };
 
+    const inpRegistroOs = conteudo.querySelector("#editRegistroOs");
+    const inpNumeroVenda = conteudo.querySelector("#editNumeroVenda");
+    const inpFormaPgto = conteudo.querySelector("#editFormaPagamento");
+    const lembreteVenda = conteudo.querySelector("#lembreteNumeroVenda");
+
+    const atualizarDestaqueELembrete = () => {
+      const temRegistro = Boolean(inpRegistroOs?.value.trim());
+      const temVenda = Boolean(inpNumeroVenda?.value.trim());
+      const temPgto = Boolean(inpFormaPgto?.value.trim());
+
+      if (inpRegistroOs) {
+        inpRegistroOs.style.borderColor = temRegistro ? "#2563eb" : "#93c5fd";
+        inpRegistroOs.style.background = temRegistro ? "#eff6ff" : "#f8fbff";
+      }
+
+      if (inpNumeroVenda) {
+        inpNumeroVenda.style.borderColor = temVenda ? "#059669" : "#6ee7b7";
+        inpNumeroVenda.style.background = temVenda ? "#ecfdf5" : "#f4fbf8";
+      }
+
+      if (lembreteVenda) {
+        if (temVenda) {
+          lembreteVenda.style.display = "block";
+          lembreteVenda.innerHTML = temPgto
+            ? `<strong>Lembrete:</strong> OS marcada como <strong>Concluído</strong> com pagamento em <strong>${esc(inpFormaPgto.value.trim().toUpperCase())}</strong>. Confira o valor total antes de salvar.`
+            : `<strong>Lembrete:</strong> OS marcada como <strong>Concluído</strong>. Lembre-se de informar a <strong>Forma de pagamento</strong> (se já foi pago) e conferir o valor total.`;
+        } else {
+          lembreteVenda.style.display = "none";
+        }
+      }
+    };
+
+    atualizarDestaqueELembrete();
+
     conteudo
       .querySelector("#btnToggleCancelar")
       ?.addEventListener("click", () => {
         draft.status = draft.status === "Cancelado" ? "" : "Cancelado";
         atualizarStatusNaTela();
+        atualizarDestaqueELembrete();
         const btnCancel = conteudo.querySelector("#btnToggleCancelar");
         if (btnCancel) {
           btnCancel.textContent =
@@ -1104,13 +1169,17 @@ export function criarModalDetalhesOS({
         }
       });
 
-    conteudo
-      .querySelector("#editRegistroOs")
-      ?.addEventListener("input", atualizarStatusNaTela);
+    inpRegistroOs?.addEventListener("input", () => {
+      atualizarStatusNaTela();
+      atualizarDestaqueELembrete();
+    });
 
-    conteudo
-      .querySelector("#editNumeroVenda")
-      ?.addEventListener("input", atualizarStatusNaTela);
+    inpNumeroVenda?.addEventListener("input", () => {
+      atualizarStatusNaTela();
+      atualizarDestaqueELembrete();
+    });
+
+    inpFormaPgto?.addEventListener("input", atualizarDestaqueELembrete);
 
     const inpCpf = conteudo.querySelector("#editDocumento");
     inpCpf?.addEventListener("input", (e) => {
@@ -1247,6 +1316,7 @@ export function criarModalDetalhesOS({
 
           await onAtualizarOS(osAtual, {
             ...patch,
+            forma_pagamento: draft.forma_pagamento || null,
             fotos_urls: urlsFinais,
             novas_fotos_arquivos: draft.novas_fotos_arquivos,
             novas_fotos_miniaturas: draft.novas_fotos_miniaturas,
@@ -1266,12 +1336,26 @@ export function criarModalDetalhesOS({
       });
   }
 
+  const onSetorChange = async () => {
+    if (!estaAberto() || !osAtual) return;
+    catalogoServicos = await carregarCatalogoServicos(setorCatalogo);
+    const dl = getConteudo()?.querySelector("#datalistCatalogoServicos");
+    if (dl) {
+      dl.innerHTML = catalogoServicos
+        .map((s) => `<option value="${esc(s.nome)}"></option>`)
+        .join("");
+    }
+  };
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("device-setor-change", onSetorChange);
+  }
+
   async function abrir(o) {
     if (!o) return;
     limparPreviewsNovasFotos(draft);
     osAtual = o;
 
-    // Pega o que já está no banco e garante que não vai duplicar o texto manual
     const obsAuto = String(o.observacao || "")
       .trim()
       .toUpperCase();
@@ -1279,7 +1363,6 @@ export function criarModalDetalhesOS({
       .trim()
       .toUpperCase();
 
-    // Se o banco já tem o texto manual dentro da observacao antiga, limpamos para não repetir
     let obsBase = obsAuto;
     if (obsManual && obsAuto.includes(obsManual)) {
       obsBase = obsAuto
@@ -1300,6 +1383,7 @@ export function criarModalDetalhesOS({
       numero_os_conserto: o.numero_os_conserto || "",
       registro_os: o.registro_os || "",
       numero_venda: o.numero_venda || "",
+      forma_pagamento: o.forma_pagamento || "",
       status: o.status === "Cancelado" ? "Cancelado" : "",
       observacao: obsInicial,
       observacao_manual: o.observacao_manual || "",
@@ -1322,7 +1406,7 @@ export function criarModalDetalhesOS({
 
     draft = baseDraft;
     render();
-    catalogoServicos = await carregarCatalogoServicos();
+    catalogoServicos = await carregarCatalogoServicos(setorCatalogo);
     if (estaAberto() && osAtual === o) {
       const dl = getConteudo()?.querySelector("#datalistCatalogoServicos");
       if (dl) {
