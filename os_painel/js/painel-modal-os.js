@@ -1193,6 +1193,8 @@ export function criarModalDetalhesOS({
         modo: "mercosul",
         onChange: (_val, _dica, modo) => {
           if (btnModoPlaca) btnModoPlaca.textContent = modo.toUpperCase();
+          sincronizarCamposDoDom(conteudo);
+          sincronizarServicosNaObservacao(conteudo, draft);
         },
       });
       btnModoPlaca?.addEventListener("click", () => {
@@ -1200,7 +1202,6 @@ export function criarModalDetalhesOS({
         inpPlaca.focus();
       });
     }
-
     conteudo.querySelectorAll(".item-servico").forEach((inp) => {
       inp.addEventListener("change", async (e) => {
         const tr = e.target.closest("tr[data-item-idx]");
@@ -1406,6 +1407,7 @@ export function criarModalDetalhesOS({
 
     draft = baseDraft;
     render();
+    sincronizarServicosNaObservacao(getConteudo(), draft);
     catalogoServicos = await carregarCatalogoServicos(setorCatalogo);
     if (estaAberto() && osAtual === o) {
       const dl = getConteudo()?.querySelector("#datalistCatalogoServicos");
@@ -1415,7 +1417,6 @@ export function criarModalDetalhesOS({
           .join("");
       }
     }
-  }
 
   getOverlay()?.addEventListener("click", (e) => {
     if (e.target.id === overlayId) fechar();
