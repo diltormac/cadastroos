@@ -1189,16 +1189,24 @@ export function criarModalDetalhesOS({
     const inpPlaca = conteudo.querySelector("#editPlaca");
     const btnModoPlaca = conteudo.querySelector("#btnModoPlaca");
     if (inpPlaca) {
+      const atualizarPlacaNaObs = () => {
+        sincronizarCamposDoDom(conteudo);
+        sincronizarServicosNaObservacao(conteudo, draft);
+      };
+
       ctrlPlaca = criarControladorPlaca(inpPlaca, {
         modo: "mercosul",
         onChange: (_val, _dica, modo) => {
           if (btnModoPlaca) btnModoPlaca.textContent = modo.toUpperCase();
-          sincronizarCamposDoDom(conteudo);
-          sincronizarServicosNaObservacao(conteudo, draft);
+          atualizarPlacaNaObs();
         },
       });
+
+      inpPlaca.addEventListener("input", atualizarPlacaNaObs);
+
       btnModoPlaca?.addEventListener("click", () => {
         ctrlPlaca?.alternarModo();
+        atualizarPlacaNaObs();
         inpPlaca.focus();
       });
     }
@@ -1335,6 +1343,8 @@ export function criarModalDetalhesOS({
           );
         }
       });
+
+    sincronizarServicosNaObservacao(conteudo, draft);
   }
 
   const onSetorChange = async () => {
@@ -1417,7 +1427,7 @@ export function criarModalDetalhesOS({
           .join("");
       }
     }
-
+  }
   getOverlay()?.addEventListener("click", (e) => {
     if (e.target.id === overlayId) fechar();
   });
