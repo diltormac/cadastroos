@@ -192,6 +192,13 @@ export function sincronizarServicosNaObservacao(conteudo, draft) {
     ? `SERVIÇOS: ${nomesServicos.join(", ")}`
     : "";
 
+  const placaAtual = String(
+    conteudo.querySelector("#editPlaca")?.value ?? draft.placa ?? "",
+  )
+    .trim()
+    .toUpperCase();
+  const blocoPlaca = placaAtual ? `PLACA: ${placaAtual}` : "";
+
   const atual = String(inpObs.value || "").toUpperCase();
   const partes = atual
     .split("|")
@@ -199,11 +206,15 @@ export function sincronizarServicosNaObservacao(conteudo, draft) {
     .filter(Boolean);
 
   const outrasPartes = partes.filter(
-    (p) => !p.startsWith("SERVIÇOS:") && !p.startsWith("COR:"),
+    (p) =>
+      !p.startsWith("SERVIÇOS:") &&
+      !p.startsWith("PLACA:") &&
+      !p.startsWith("COR:"),
   );
-  const combinadas = blocoServicos
-    ? [blocoServicos, ...outrasPartes]
-    : outrasPartes;
+
+  const combinadas = [blocoServicos, blocoPlaca, ...outrasPartes].filter(
+    Boolean,
+  );
 
   const novoTexto = combinadas.join(" | ");
   inpObs.value = novoTexto;

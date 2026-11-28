@@ -16,7 +16,7 @@ export function normalizarItemOS(item = {}) {
   ) {
     valorUnitario = Math.max(0, Number(valorUnitRaw));
   } else if (Number.isFinite(valorItemRaw) && valorItemRaw > 0) {
-    valorUnitario = valorItemRaw / quantidade;
+    valorUnitario = valorItemRaw;
   }
 
   const valorTotalItem = Number((quantidade * valorUnitario).toFixed(2));
